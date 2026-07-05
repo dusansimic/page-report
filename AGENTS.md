@@ -61,6 +61,12 @@ single domain: it isolates attacker-controlled report HTML from the API.
 - Allowlist (`Match`: email then login) is applied after both flows.
 - OIDC clients send the **id_token** as bearer; GitHub clients the access token.
 
+## Commits
+
+Use the [Conventional Commits](https://www.conventionalcommits.org/) format
+(`feat:`, `fix:`, `docs:`, `chore:`, …). Write commit messages with the
+`/caveman:caveman-commit` skill.
+
 ## Commands
 
 ```sh
