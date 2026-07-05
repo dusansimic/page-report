@@ -1,0 +1,57 @@
+# page-report server configuration.
+# Copy to config.yml (gitignored) or pass --config <path>.
+# Every key can be overridden by an env var: PR_ + key upper-cased,
+# dots replaced by underscores (github.client_id -> PR_GITHUB_CLIENT_ID).
+
+# Address the HTTP server binds to. Env: PR_LISTEN_ADDR. Default ":8080".
+listen_addr: ":8080"
+
+# Public base URL of the app domain (homepage + API). Env: PR_APP_BASE_URL.
+# Must be https unless dev: true. Must differ from pages_base_url host.
+app_base_url: "https://report.example.com"
+
+# Public base URL of the pages domain (login-gated /p/{id} pages).
+# Env: PR_PAGES_BASE_URL.
+pages_base_url: "https://pages.example.com"
+
+# Path to the SQLite database file. Env: PR_DB_PATH. Default "page-report.db".
+db_path: "/data/page-report.db"
+
+# Secret for signing session cookies, at least 32 bytes.
+# Env: PR_SESSION_SECRET. Generate with: openssl rand -hex 32
+session_secret: "change-me-to-32-plus-random-bytes!!"
+
+# Web session lifetime (Go duration). Env: PR_SESSION_TTL. Default "24h".
+session_ttl: "24h"
+
+# Maximum accepted upload size in bytes. Env: PR_MAX_UPLOAD_BYTES.
+# Default 5242880 (5 MiB).
+max_upload_bytes: 5242880
+
+# Identity provider: "github" or "oidc". Env: PR_PROVIDER.
+provider: "github"
+
+# Identities allowed to log in and upload (GitHub logins or OIDC subjects).
+# Env: PR_ALLOWLIST as a comma-separated string ("alice,bob").
+allowlist:
+  - "alice"
+  - "bob"
+
+# GitHub OAuth app credentials (used when provider: github).
+# Device flow must be enabled on the OAuth app.
+github:
+  client_id: ""     # Env: PR_GITHUB_CLIENT_ID
+  client_secret: "" # Env: PR_GITHUB_CLIENT_SECRET
+
+# OIDC provider settings (used when provider: oidc).
+oidc:
+  issuer: ""        # Env: PR_OIDC_ISSUER, e.g. "https://id.example.com"
+  client_id: ""     # Env: PR_OIDC_CLIENT_ID
+  client_secret: "" # Env: PR_OIDC_CLIENT_SECRET
+  # Expected aud claim on CLI bearer tokens. Env: PR_OIDC_AUDIENCE.
+  # Defaults to oidc.client_id when empty.
+  audience: ""
+
+# Dev mode: allows http:// base URLs for local runs (*.localhost).
+# Env: PR_DEV. Default false.
+dev: false

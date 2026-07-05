@@ -1,0 +1,46 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^gen/
+      - id: end-of-file-fixer
+        exclude: ^gen/
+      - id: check-yaml
+      - id: check-added-large-files
+
+  - repo: local
+    hooks:
+      - id: go-fmt
+        name: go fmt
+        entry: gofmt -l -w
+        language: system
+        types: [go]
+        exclude: ^gen/
+      - id: go-vet
+        name: go vet
+        entry: go vet ./...
+        language: system
+        types: [go]
+        pass_filenames: false
+      - id: go-mod-tidy
+        name: go mod tidy
+        entry: go mod tidy
+        language: system
+        types: [go]
+        pass_filenames: false
+      - id: go-build
+        name: go build
+        entry: go build ./...
+        language: system
+        types: [go]
+        pass_filenames: false
+
+  - repo: https://github.com/bufbuild/buf
+    rev: v1.50.0
+    hooks:
+      - id: buf-lint
+      - id: buf-format
+      # Enable after the first release tag exists:
+      # - id: buf-breaking
+      #   args: [--against, ".git#tag=v0.1.0"]

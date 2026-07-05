@@ -1,0 +1,50 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Public base URLs — must be two different hosts.
+      PR_APP_BASE_URL: ${PR_APP_BASE_URL:?e.g. https://report.example.com}
+      PR_PAGES_BASE_URL: ${PR_PAGES_BASE_URL:?e.g. https://pages.example.com}
+      PR_DB_PATH: /data/page-report.db
+      # >= 32 random bytes, e.g. `openssl rand -hex 32`.
+      PR_SESSION_SECRET: ${PR_SESSION_SECRET:?set a 32+ byte secret}
+      # "github" or "oidc".
+      PR_PROVIDER: ${PR_PROVIDER:-github}
+      # Comma-separated identities allowed to log in / upload.
+      PR_ALLOWLIST: ${PR_ALLOWLIST:?comma-separated allowlist}
+      # Provider credentials (set the ones matching PR_PROVIDER).
+      PR_GITHUB_CLIENT_ID: ${PR_GITHUB_CLIENT_ID:-}
+      PR_GITHUB_CLIENT_SECRET: ${PR_GITHUB_CLIENT_SECRET:-}
+      PR_OIDC_ISSUER: ${PR_OIDC_ISSUER:-}
+      PR_OIDC_CLIENT_ID: ${PR_OIDC_CLIENT_ID:-}
+      PR_OIDC_CLIENT_SECRET: ${PR_OIDC_CLIENT_SECRET:-}
+      PR_OIDC_AUDIENCE: ${PR_OIDC_AUDIENCE:-}
+    volumes:
+      - data:/data
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # Bare hostnames for the two Caddy site blocks (no scheme).
+      APP_DOMAIN: ${APP_DOMAIN:?e.g. report.example.com}
+      PAGES_DOMAIN: ${PAGES_DOMAIN:?e.g. pages.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  data:
+  caddy_data:
+  caddy_config:

@@ -3,3 +3,4 @@ config.yml
 /pr
 /pr-server
 *.local.yml
+.claude/

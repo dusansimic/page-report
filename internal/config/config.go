@@ -110,16 +110,15 @@ func Load(path string) (*Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
-	// Allowlist may arrive as a single comma-separated env value.
-	if len(cfg.Allowlist) == 1 && strings.Contains(cfg.Allowlist[0], ",") {
-		parts := strings.Split(cfg.Allowlist[0], ",")
-		cfg.Allowlist = cfg.Allowlist[:0]
-		for _, p := range parts {
-			if p = strings.TrimSpace(p); p != "" {
-				cfg.Allowlist = append(cfg.Allowlist, p)
-			}
+	// An env-provided allowlist arrives as one comma-separated string, which
+	// viper may additionally split on spaces; renormalize either shape.
+	var allowlist []string
+	for _, p := range strings.Split(strings.Join(cfg.Allowlist, ","), ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			allowlist = append(allowlist, p)
 		}
 	}
+	cfg.Allowlist = allowlist
 	if cfg.Provider == ProviderOIDC && cfg.OIDC.Audience == "" {
 		cfg.OIDC.Audience = cfg.OIDC.ClientID
 	}
