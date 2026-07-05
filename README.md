@@ -7,18 +7,24 @@ or any OIDC IdP) to view the page. No web admin UI — the CLI manages pages.
 
 ## Architecture
 
-```
-             AI agent                          human viewer
-                │                                   │
-        pr upload report.html                open page URL
-                │ ConnectRPC (JSON)                 │
-                ▼                                   ▼
-   ┌── app.example.org ────────┐      ┌── pages.example.org ──────┐
-   │  homepage (public)        │      │  /p/{id}   (session)      │
-   │  /pagereport.v1.* (bearer)│      │  /auth/*   (web login)    │
-   └───────────┬───────────────┘      └───────────┬───────────────┘
-               └────────────── pr-server ─────────┘
-                          SQLite (/data)
+```mermaid
+flowchart TB
+    agent["AI agent"] -->|"pr upload report.html<br>ConnectRPC (JSON, bearer)"| app
+    human["Human viewer"] -->|"open page URL<br>(web login, session cookie)"| pages
+
+    subgraph app["app.example.org"]
+        home["homepage (public)"]
+        api["/pagereport.v1.* (bearer)"]
+    end
+
+    subgraph pages["pages.example.org"]
+        view["/p/{id} (session)"]
+        auth["/auth/* (web login)"]
+    end
+
+    app --> server["pr-server"]
+    pages --> server
+    server --> db[("SQLite (/data)")]
 ```
 
 Two domains, one binary. The pages domain holds the (host-only) session
@@ -115,4 +121,4 @@ The agent skill lives in `skill/SKILL.md`.
 
 ## License
 
-MIT (see LICENSE).
+[BSD 2-Clause](LICENSE)
