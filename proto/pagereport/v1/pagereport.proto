@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package pagereport.v1;
+
+option go_package = "github.com/dusan/page-report/gen/pagereport/v1;pagereportv1";
+
+// PageService is the CLI-facing API for uploading and managing report pages.
+// All RPCs except GetAuthConfig require a bearer token from the configured
+// identity provider.
+service PageService {
+  // GetAuthConfig returns the identity-provider settings the CLI needs to run
+  // the OAuth device flow. Unauthenticated.
+  rpc GetAuthConfig(GetAuthConfigRequest) returns (GetAuthConfigResponse) {}
+  rpc UploadPage(UploadPageRequest) returns (UploadPageResponse) {}
+  rpc ListPages(ListPagesRequest) returns (ListPagesResponse) {}
+  rpc GetPage(GetPageRequest) returns (GetPageResponse) {}
+  rpc DeletePage(DeletePageRequest) returns (DeletePageResponse) {}
+  rpc PrunePages(PrunePagesRequest) returns (PrunePagesResponse) {}
+}
+
+message GetAuthConfigRequest {}
+
+message GetAuthConfigResponse {
+  // "github" or "oidc".
+  string provider = 1;
+  // OIDC issuer URL (empty for github).
+  string issuer = 2;
+  // OAuth client id the CLI uses for the device flow.
+  string client_id = 3;
+  // Scopes to request in the device flow.
+  repeated string scopes = 4;
+  // Device authorization endpoint.
+  string device_endpoint = 5;
+  // Token endpoint for polling / refresh.
+  string token_endpoint = 6;
+}
+
+message PageMeta {
+  string id = 1;
+  string title = 2;
+  string content_type = 3;
+  int64 size_bytes = 4;
+  // Unix seconds UTC.
+  int64 created_at = 5;
+  string created_by = 6;
+  // Full URL where the page is served (pages domain).
+  string url = 7;
+}
+
+message UploadPageRequest {
+  // Raw HTML bytes (base64 in JSON encoding).
+  bytes content = 1;
+  string title = 2;
+  // Defaults to "text/html; charset=utf-8".
+  string content_type = 3;
+}
+
+message UploadPageResponse {
+  string id = 1;
+  string url = 2;
+}
+
+message ListPagesRequest {}
+
+message ListPagesResponse {
+  repeated PageMeta pages = 1;
+}
+
+message GetPageRequest {
+  string id = 1;
+  // When true, the response includes the stored HTML content.
+  bool include_content = 2;
+}
+
+message GetPageResponse {
+  PageMeta meta = 1;
+  bytes content = 2;
+}
+
+message DeletePageRequest {
+  string id = 1;
+}
+
+message DeletePageResponse {}
+
+message PrunePagesRequest {
+  // Delete pages created earlier than this many seconds ago.
+  int64 older_than_seconds = 1;
+}
+
+message PrunePagesResponse {
+  int64 deleted_count = 1;
+}
