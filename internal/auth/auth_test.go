@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,6 +110,38 @@ func TestSanitizeNext(t *testing.T) {
 		if got := sanitizeNext(in); got != want {
 			t.Errorf("sanitizeNext(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestLogoutRedirect(t *testing.T) {
+	h := Handlers(NewSessionManager(testConfig()), NewAllowlist([]string{"me@example.org"}))
+
+	post := func(body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/auth/logout", strings.NewReader(body))
+		if body != "" {
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, r)
+		return rec
+	}
+
+	// Browser form post: land back on the page it came from.
+	rec := post("next=/")
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
+		t.Errorf("form logout: got %d %q, want 303 /", rec.Code, rec.Header().Get("Location"))
+	}
+
+	// Programmatic caller: unchanged 204, no redirect.
+	if rec := post(""); rec.Code != http.StatusNoContent {
+		t.Errorf("bare logout: got %d, want 204", rec.Code)
+	}
+
+	// Off-origin target is dropped, not followed.
+	rec = post("next=" + url.QueryEscape("//evil.example.org"))
+	if rec.Code != http.StatusNoContent || rec.Header().Get("Location") != "" {
+		t.Errorf("off-origin next: got %d %q, want 204 and no Location",
+			rec.Code, rec.Header().Get("Location"))
 	}
 }
 

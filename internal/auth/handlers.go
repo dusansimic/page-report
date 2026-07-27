@@ -68,6 +68,12 @@ func Handlers(m *SessionManager, allow *Allowlist) http.Handler {
 
 	mux.HandleFunc("POST /auth/logout", func(w http.ResponseWriter, r *http.Request) {
 		m.Clear(w, r)
+		// Browser form posts send a same-origin `next` path and expect to land
+		// somewhere; programmatic callers send none and still get 204.
+		if next := sanitizeNext(r.FormValue("next")); next != "" {
+			http.Redirect(w, r, next, http.StatusSeeOther)
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 
