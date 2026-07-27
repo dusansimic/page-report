@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -20,6 +22,14 @@ import (
 	"github.com/dusan/page-report/internal/client"
 )
 
+// Build metadata, injected via -ldflags "-X main.version=..." by the release
+// workflow. Without ldflags they fall back to the embedded build info.
+var (
+	version = "dev"
+	commit  = ""
+	date    = ""
+)
+
 var serverURL string
 
 func main() {
@@ -28,11 +38,14 @@ func main() {
 		Short:         "Publish and manage HTML report pages on a page-report server",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		Version:       versionString(),
 	}
+	root.SetVersionTemplate("pr {{.Version}}\n")
 	root.PersistentFlags().StringVar(&serverURL, "server", "",
 		"page-report server base URL (app domain); falls back to PR_SERVER_URL")
 
-	root.AddCommand(loginCmd(), logoutCmd(), uploadCmd(), listCmd(), deleteCmd(), pruneCmd())
+	root.AddCommand(loginCmd(), logoutCmd(), uploadCmd(), listCmd(), deleteCmd(), pruneCmd(),
+		versionCmd())
 
 	if err := root.Execute(); err != nil {
 		msg := err.Error()
@@ -248,6 +261,76 @@ func pruneCmd() *cobra.Command {
 	cmd.Flags().StringVar(&olderThan, "older-than", "", "age threshold, e.g. 30d or 720h (required)")
 	cmd.MarkFlagRequired("older-than")
 	return cmd
+}
+
+func versionCmd() *cobra.Command {
+	var asJSON bool
+	cmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print version and build information",
+		Args:  cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			v, c, d := buildMeta()
+			if asJSON {
+				return printJSON(map[string]string{
+					"version":  v,
+					"commit":   c,
+					"date":     d,
+					"go":       runtime.Version(),
+					"platform": runtime.GOOS + "/" + runtime.GOARCH,
+				})
+			}
+			fmt.Printf("pr %s\n", v)
+			if c != "" {
+				fmt.Printf("commit:   %s\n", c)
+			}
+			if d != "" {
+				fmt.Printf("built:    %s\n", d)
+			}
+			fmt.Printf("go:       %s\n", runtime.Version())
+			fmt.Printf("platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "output JSON")
+	return cmd
+}
+
+// buildMeta resolves the ldflags-injected build metadata, falling back to the
+// build info the toolchain embeds (populated for `go install`-built binaries).
+func buildMeta() (v, c, d string) {
+	v, c, d = version, commit, date
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return v, c, d
+	}
+	if v == "dev" && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		v = bi.Main.Version
+	}
+	for _, s := range bi.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			if c == "" {
+				c = s.Value
+			}
+		case "vcs.time":
+			if d == "" {
+				d = s.Value
+			}
+		}
+	}
+	return v, c, d
+}
+
+func versionString() string {
+	v, c, _ := buildMeta()
+	if c != "" {
+		if len(c) > 12 {
+			c = c[:12]
+		}
+		return v + " (" + c + ")"
+	}
+	return v
 }
 
 func printJSON(v any) error {

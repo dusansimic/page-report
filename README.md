@@ -54,6 +54,14 @@ PR_OIDC_CLIENT_SECRET=...
 
 ## CLI
 
+Grab a `linux/amd64` binary from the [latest release][releases] (tarball plus
+`checksums.txt`), or build it yourself with `go build -o pr ./cmd/pr`.
+Untagged builds of `main` are also uploaded as the `pr-linux-amd64` artifact on
+every [Build CLI][build-cli] run. `pr version` reports the build metadata.
+
+[releases]: https://github.com/dusansimic/page-report/releases
+[build-cli]: https://github.com/dusansimic/page-report/actions/workflows/build-cli.yml
+
 ```sh
 export PR_SERVER_URL=https://app.example.org
 pr login                          # OAuth device flow against your IdP
