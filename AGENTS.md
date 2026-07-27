@@ -18,7 +18,8 @@ module, two binaries.
 | `internal/store` | SQLite persistence + golang-migrate runner |
 | `internal/server` | HTTP surface: host-routed muxes, RPC impl, page serving |
 | `internal/client` | CLI-side: device flow, credential store, connect client |
-| `web/static` | embedded homepage assets |
+| `web/static` | embedded app-domain homepage assets (served verbatim) |
+| `web/templates` | `html/template` sources rendered by `internal/server` |
 | `migrations/` | numbered SQL migration pairs, embedded into the binary |
 | `skill/SKILL.md` | agent skill teaching the upload flow |
 
@@ -44,6 +45,14 @@ Every key must exist in three places, added together:
 `Config` struct + `keys` list in `internal/config/config.go`, and
 `config.example.yml`. Env override is `PR_<KEY>` with dots → underscores
 (`oidc.client_id` → `PR_OIDC_CLIENT_ID`).
+
+## Templates
+
+Templates live in `web/templates` (a separate embed FS from `web/static`, which
+the app domain serves verbatim) and are parsed once at package init with
+`template.Must(template.ParseFS(...))`. The pages domain ships no static assets
+and no JavaScript, so template CSS is inlined and the response carries a
+`default-src 'none'` CSP.
 
 ## Two-domain rule
 

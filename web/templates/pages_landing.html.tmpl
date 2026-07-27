@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>page-report</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      color: #1a1a1a;
+      background: #fafafa;
+      margin: 0;
+    }
+    main {
+      max-width: 46rem;
+      margin: 4rem auto;
+      padding: 0 1.5rem;
+      line-height: 1.6;
+    }
+    h1 {
+      font-size: 1.75rem;
+    }
+    h2 {
+      font-size: 1.15rem;
+      margin-top: 2.5rem;
+    }
+    a {
+      color: #0055cc;
+    }
+    code {
+      background: #eee;
+      padding: 0.1rem 0.3rem;
+      border-radius: 3px;
+    }
+    pre {
+      background: #eee;
+      padding: 0.75rem 1rem;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+    }
+    .session {
+      border: 1px solid #ddd;
+      background: #fff;
+      border-radius: 4px;
+      padding: 0.6rem 0.9rem;
+    }
+    .session form {
+      display: inline;
+      margin: 0;
+    }
+    .session p {
+      margin-bottom: 0;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>page-report</h1>
+    <p>
+      This domain serves single-page HTML reports published with the
+      <code>pr</code> command-line tool. Every report link requires a login from
+      the server's allowlist &mdash; page URLs are random, but they are not the
+      access control, so a link alone grants nobody access.
+    </p>
+
+    <div class="session">
+      {{- if .SignedIn}}
+      Signed in{{if .Account}} as <strong>{{.Account}}</strong>{{end}}.
+      <form method="post" action="/auth/logout">
+        <input type="hidden" name="next" value="/">
+        <button type="submit">Sign out</button>
+      </form>
+      {{- if not .Allowed}}
+      <p>This account is not on the allowlist and cannot open reports.</p>
+      {{- end}}
+      {{- else}}
+      <a href="/auth/login">Sign in</a> to open report links.
+      {{- end}}
+    </div>
+
+    <h2>Install the CLI</h2>
+    <p>
+      Download <code>pr_&lt;tag&gt;_linux_amd64.tar.gz</code> and
+      <code>checksums.txt</code> from the
+      <a href="{{.RepoURL}}/releases/latest">latest release</a> (linux/amd64
+      only), or build it from source:
+    </p>
+    <pre><code>git clone {{.RepoURL}}.git
+cd page-report
+go build -o pr ./cmd/pr</code></pre>
+
+    <h2>Point it at this server</h2>
+    <pre><code>export PR_SERVER_URL={{.AppBaseURL}}</code></pre>
+    <p>Every command also accepts <code>--server {{.AppBaseURL}}</code> instead.</p>
+
+    <h2>Publish and manage reports</h2>
+    <pre><code>pr login                                        # device-flow login via the IdP
+pr upload report.html --title "Weekly metrics"  # prints the shareable report URL
+pr list                                         # add --json for machine output
+pr delete &lt;id&gt;
+pr prune --older-than 30d                       # --older-than is required
+pr logout                                       # forget stored credentials</code></pre>
+
+    <h2>Source</h2>
+    <p><a href="{{.RepoURL}}">{{.RepoURL}}</a></p>
+  </main>
+</body>
+</html>

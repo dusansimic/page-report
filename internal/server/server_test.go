@@ -133,8 +133,98 @@ func TestHomepagePerDomain(t *testing.T) {
 	if rec := doReq(h, "GET", "app.example.org:8443", "/"); rec.Code != http.StatusOK {
 		t.Fatalf("app homepage with port: got %d, want 200", rec.Code)
 	}
-	if rec := doReq(h, "GET", "pages.example.org", "/"); rec.Code != http.StatusNotFound {
-		t.Fatalf("pages homepage: got %d, want 404", rec.Code)
+	if rec := doReq(h, "GET", "pages.example.org", "/"); rec.Code != http.StatusOK {
+		t.Fatalf("pages landing: got %d, want 200", rec.Code)
+	}
+}
+
+func TestPagesLandingAnonymous(t *testing.T) {
+	h := testServer(t, newFakeStore(), fakeSessions{ok: false}, fakeValidator{})
+	rec := doReq(h, "GET", "pages.example.org", "/")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("landing: got %d, want 200", rec.Code)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		"export PR_SERVER_URL=https://app.example.org",
+		"https://github.com/dusansimic/page-report",
+		`href="/auth/login"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("landing body missing %q", want)
+		}
+	}
+	if strings.Contains(body, "/auth/logout") {
+		t.Error("anonymous landing offers a sign out control")
+	}
+
+	hd := rec.Header()
+	if ct := hd.Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	if got := hd.Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("X-Content-Type-Options = %q", got)
+	}
+	if hd.Get("Content-Security-Policy") == "" {
+		t.Error("missing Content-Security-Policy")
+	}
+	if got := hd.Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
+	}
+}
+
+func TestPagesLandingSignedIn(t *testing.T) {
+	h := testServer(t, newFakeStore(),
+		fakeSessions{id: auth.Identity{Email: "me@example.org"}, ok: true}, fakeValidator{})
+	rec := doReq(h, "GET", "pages.example.org", "/")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("landing: got %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "me@example.org") || !strings.Contains(body, `action="/auth/logout"`) {
+		t.Error("signed-in landing missing account or sign out control")
+	}
+	if strings.Contains(body, `href="/auth/login"`) {
+		t.Error("signed-in landing still offers sign in")
+	}
+
+	// A session outlives the allowlist entry that minted it.
+	h = testServer(t, newFakeStore(),
+		fakeSessions{id: auth.Identity{Email: "intruder@example.org"}, ok: true}, fakeValidator{})
+	rec = doReq(h, "GET", "pages.example.org", "/")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("landing: got %d, want 200", rec.Code)
+	}
+	body = rec.Body.String()
+	if !strings.Contains(body, "not on the allowlist") {
+		t.Error("non-allowlisted session not warned")
+	}
+	if !strings.Contains(body, `action="/auth/logout"`) {
+		t.Error("non-allowlisted session cannot clear its stale cookie")
+	}
+}
+
+func TestPagesLandingEscapesIdentity(t *testing.T) {
+	h := testServer(t, newFakeStore(),
+		fakeSessions{id: auth.Identity{Email: "<script>alert(1)</script>@x"}, ok: true},
+		fakeValidator{})
+	body := doReq(h, "GET", "pages.example.org", "/").Body.String()
+	if strings.Contains(body, "<script>") {
+		t.Error("identity rendered unescaped")
+	}
+	if !strings.Contains(body, "&lt;script&gt;") {
+		t.Error("escaped identity not rendered at all")
+	}
+}
+
+func TestPagesLandingRoutingIsExact(t *testing.T) {
+	h := testServer(t, newFakeStore(), fakeSessions{}, fakeValidator{})
+	if rec := doReq(h, "GET", "pages.example.org", "/nope"); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown pages path: got %d, want 404", rec.Code)
+	}
+	if rec := doReq(h, "POST", "pages.example.org", "/"); rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("POST landing: got %d, want 405", rec.Code)
 	}
 }
 

@@ -18,6 +18,7 @@ flowchart TB
     end
 
     subgraph pages["pages.example.org"]
+        landing["/ landing page (public)"]
         view["/p/{id} (session)"]
         auth["/auth/* (web login)"]
     end

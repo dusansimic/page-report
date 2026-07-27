@@ -81,6 +81,7 @@ func (s *Server) Handler() http.Handler {
 	appMux.Handle(rpcPath, rpcHandler)
 
 	pagesMux := http.NewServeMux()
+	pagesMux.HandleFunc("GET /{$}", s.handleLanding)
 	if s.authRoutes != nil {
 		pagesMux.Handle("/auth/", s.authRoutes)
 	}

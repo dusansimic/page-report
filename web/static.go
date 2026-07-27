@@ -1,4 +1,5 @@
-// Package web holds embedded static assets served by the app domain.
+// Package web holds embedded web assets: static files served verbatim by the
+// app domain, and HTML templates rendered by internal/server.
 package web
 
 import "embed"
