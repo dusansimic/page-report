@@ -64,7 +64,9 @@ every [Build CLI][build-cli] run. `pr version` reports the build metadata.
 [build-cli]: https://github.com/dusansimic/page-report/actions/workflows/build-cli.yml
 
 ```sh
-export PR_SERVER_URL=https://app.example.org
+mkdir -p ~/.config/page-report
+echo 'server_url: https://app.example.org' > ~/.config/page-report/config.yml
+
 pr login                          # OAuth device flow against your IdP
 pr upload report.html --title "Weekly metrics"   # prints the page URL
 pr list [--json]
@@ -73,9 +75,22 @@ pr prune --older-than 30d
 pr logout
 ```
 
-All commands accept `--server` instead of `PR_SERVER_URL`.
-
 ## Configuration
+
+### CLI
+
+`$XDG_CONFIG_HOME/page-report/config.yml` (default
+`~/.config/page-report/config.yml`), or an explicit path via `--config`:
+
+| Key | Env var | Description |
+|---|---|---|
+| `server_url` | `PR_SERVER_URL` | server base URL (app domain) |
+
+Precedence is `--server` > `PR_SERVER_URL` > config file; with none of the
+three set, commands fail with `server URL required`. Credentials are stored
+separately, next to the config file in `credentials.json` (mode `0600`).
+
+### Server
 
 YAML file (`--config` flag or `./config.yml`) with `PR_*` env overrides —
 see `config.example.yml` for the full commented reference.

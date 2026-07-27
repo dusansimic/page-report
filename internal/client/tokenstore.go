@@ -28,15 +28,11 @@ type Credentials struct {
 var ErrNotLoggedIn = errors.New("not logged in: run `pr login` first")
 
 func credentialsPath() (string, error) {
-	dir := os.Getenv("XDG_CONFIG_HOME")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("resolve home dir: %w", err)
-		}
-		dir = filepath.Join(home, ".config")
+	dir, err := configDir()
+	if err != nil {
+		return "", err
 	}
-	return filepath.Join(dir, "page-report", "credentials.json"), nil
+	return filepath.Join(dir, "credentials.json"), nil
 }
 
 func Save(creds Credentials) error {

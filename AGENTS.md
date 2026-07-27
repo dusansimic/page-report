@@ -17,7 +17,7 @@ module, two binaries.
 | `internal/auth` | goth web login, session cookie, token validators, allowlist |
 | `internal/store` | SQLite persistence + golang-migrate runner |
 | `internal/server` | HTTP surface: host-routed muxes, RPC impl, page serving |
-| `internal/client` | CLI-side: device flow, credential store, connect client |
+| `internal/client` | CLI-side: device flow, credential store, XDG config file, connect client |
 | `web/static` | embedded app-domain homepage assets (served verbatim) |
 | `web/templates` | `html/template` sources rendered by `internal/server` |
 | `migrations/` | numbered SQL migration pairs, embedded into the binary |
@@ -41,10 +41,20 @@ via the `migrations` package and applied automatically at server startup.
 
 ## Config
 
-Every key must exist in three places, added together:
-`Config` struct + `keys` list in `internal/config/config.go`, and
-`config.example.yml`. Env override is `PR_<KEY>` with dots → underscores
-(`oidc.client_id` → `PR_OIDC_CLIENT_ID`).
+Two independent viper configs, both using the `PR_` env prefix with dots →
+underscores (`oidc.client_id` → `PR_OIDC_CLIENT_ID`); every key is explicitly
+`BindEnv`-bound via a `keys` list because `AutomaticEnv` alone does not survive
+`Unmarshal`.
+
+- **Server** (`internal/config`): `./config.yml` or `--config`. Every key must
+  exist in three places, added together: `Config` struct + `keys` list in
+  `internal/config/config.go`, and `config.example.yml`.
+- **CLI** (`internal/client/config.go`): `$XDG_CONFIG_HOME/page-report/config.yml`
+  (missing file is fine) or `--config`. Every key must exist in the `Config`
+  struct + `keys` list there, and in the README "Configuration → CLI" table.
+  `configDir()` there is the single source of truth for the XDG dir, shared with
+  the credential store. Server URL precedence: `--server` > `PR_SERVER_URL` >
+  config file.
 
 ## Templates
 

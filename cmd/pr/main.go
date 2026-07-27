@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -30,7 +31,11 @@ var (
 	date    = ""
 )
 
-var serverURL string
+var (
+	serverURL  string
+	configPath string
+	cfg        *client.Config
+)
 
 func main() {
 	root := &cobra.Command{
@@ -42,7 +47,14 @@ func main() {
 	}
 	root.SetVersionTemplate("pr {{.Version}}\n")
 	root.PersistentFlags().StringVar(&serverURL, "server", "",
-		"page-report server base URL (app domain); falls back to PR_SERVER_URL")
+		"page-report server base URL (app domain); falls back to PR_SERVER_URL, then the config file")
+	root.PersistentFlags().StringVar(&configPath, "config", "",
+		"path to config file (default: $XDG_CONFIG_HOME/page-report/config.yml)")
+	root.PersistentPreRunE = func(*cobra.Command, []string) error {
+		var err error
+		cfg, err = client.LoadConfig(configPath)
+		return err
+	}
 
 	root.AddCommand(loginCmd(), logoutCmd(), uploadCmd(), listCmd(), deleteCmd(), pruneCmd(),
 		versionCmd())
@@ -57,14 +69,22 @@ func main() {
 	}
 }
 
+// server resolves the server base URL: the --server flag wins, otherwise the
+// loaded config, which already applied PR_SERVER_URL over the config file.
 func server() (string, error) {
-	if serverURL != "" {
-		return strings.TrimRight(serverURL, "/"), nil
+	raw := strings.TrimRight(serverURL, "/")
+	if raw == "" && cfg != nil {
+		raw = cfg.ServerURL
 	}
-	if env := os.Getenv("PR_SERVER_URL"); env != "" {
-		return strings.TrimRight(env, "/"), nil
+	if raw == "" {
+		return "", errors.New("server URL required: pass --server, set PR_SERVER_URL, " +
+			"or set server_url in ~/.config/page-report/config.yml")
 	}
-	return "", errors.New("server URL required: pass --server or set PR_SERVER_URL")
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return "", fmt.Errorf("invalid server URL %q: must be an absolute http(s) URL", raw)
+	}
+	return raw, nil
 }
 
 func authedClient() (pagereportv1connect.PageServiceClient, error) {

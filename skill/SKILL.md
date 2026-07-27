@@ -8,8 +8,10 @@ description: Publish static HTML reports to a page-report server and share the U
 ## Prerequisites
 
 - The `pr` binary is in PATH.
-- The server URL is configured: either `PR_SERVER_URL` is set in the
-  environment, or pass `--server <app-domain-url>` to every command.
+- The server URL is configured, in any of three ways (highest precedence
+  first): `--server <app-domain-url>` on every command, `PR_SERVER_URL` in the
+  environment, or `server_url: <app-domain-url>` in
+  `~/.config/page-report/config.yml`.
 
 ## One-time login
 
@@ -54,4 +56,5 @@ pr prune --older-than 30d  # remove pages older than a duration (e.g. 30d, 720h)
 
 - `unauthenticated` error / hint about login → run `pr login` again and relay
   the verification code to the user.
-- "server URL required" → set `PR_SERVER_URL` or pass `--server`.
+- "server URL required" → pass `--server`, set `PR_SERVER_URL`, or set
+  `server_url` in `~/.config/page-report/config.yml`.
