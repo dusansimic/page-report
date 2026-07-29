@@ -52,6 +52,18 @@ pr delete <id>             # remove one page
 pr prune --older-than 30d  # remove pages older than a duration (e.g. 30d, 720h)
 ```
 
+## Retrieving a published report
+
+```sh
+pr get <id>                     # HTML to stdout
+pr get <id> -o report.html      # write to a file (--force to overwrite)
+pr get <id> --meta [--json]     # metadata only, no HTML
+```
+
+Use this to recover a report published in an earlier session (get the id from
+`pr list`, or from the `/p/<id>` segment of the page URL) instead of asking the
+user to copy it out of the browser.
+
 ## Troubleshooting
 
 - `unauthenticated` error / hint about login → run `pr login` again and relay

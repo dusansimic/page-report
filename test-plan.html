@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Implementation Plan: CLI Download Feature</title>
+	<style>
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+			line-height: 1.6;
+			max-width: 900px;
+			margin: 40px auto;
+			padding: 20px;
+			background: #f5f5f5;
+			color: #333;
+		}
+		h1 {
+			color: #2c3e50;
+			border-bottom: 3px solid #3498db;
+			padding-bottom: 10px;
+		}
+		h2 {
+			color: #34495e;
+			margin-top: 30px;
+		}
+		h3 {
+			color: #7f8c8d;
+		}
+		.section {
+			background: white;
+			padding: 20px;
+			margin: 20px 0;
+			border-left: 4px solid #3498db;
+			border-radius: 4px;
+		}
+		code {
+			background: #ecf0f1;
+			padding: 2px 6px;
+			border-radius: 3px;
+			font-family: "Monaco", "Menlo", monospace;
+		}
+		pre {
+			background: #2c3e50;
+			color: #ecf0f1;
+			padding: 15px;
+			border-radius: 4px;
+			overflow-x: auto;
+		}
+		ul, ol {
+			margin: 10px 0;
+			padding-left: 20px;
+		}
+		li {
+			margin: 8px 0;
+		}
+		.priority {
+			display: inline-block;
+			padding: 4px 8px;
+			border-radius: 3px;
+			font-size: 0.9em;
+			font-weight: bold;
+			margin-left: 10px;
+		}
+		.high {
+			background: #e74c3c;
+			color: white;
+		}
+		.medium {
+			background: #f39c12;
+			color: white;
+		}
+	</style>
+</head>
+<body>
+	<h1>Implementation Plan: Download Specific Plan HTML Files</h1>
+
+	<div class="section">
+		<h2>Overview</h2>
+		<p>Add a <code>download</code> command to the CLI to fetch and save HTML report files from the server by ID. This enables agents to programmatically retrieve previously uploaded plan pages.</p>
+	</div>
+
+	<div class="section">
+		<h2>Requirements</h2>
+		<ul>
+			<li>Fetch HTML content from server using existing <code>GetPage</code> RPC with <code>include_content=true</code></li>
+			<li>Write content to local file with optional name override</li>
+			<li>Support both individual file and batch download workflows</li>
+			<li>Output file path on success (for further processing)</li>
+			<li>Preserve content-type handling (default: text/html)</li>
+		</ul>
+	</div>
+
+	<div class="section">
+		<h2>API Surface</h2>
+		<pre>pr download &lt;id&gt; [--output FILE] [--json]</pre>
+		<h3>Flags:</h3>
+		<ul>
+			<li><code>--output FILE</code> (optional): save to this path; default: <code>&lt;id&gt;.html</code></li>
+			<li><code>--json</code> (optional): output <code>{"path": "...", "id": "...", "title": "..."}</code></li>
+		</ul>
+		<h3>Examples:</h3>
+		<pre>pr download abc123
+pr download abc123 --output my-plan.html
+pr download abc123 --json | jq .path</pre>
+	</div>
+
+	<div class="section">
+		<h2>Implementation Tasks</h2>
+
+		<h3>1. Add download command to CLI <span class="priority high">HIGH</span></h3>
+		<ul>
+			<li>File: <code>cmd/pr/main.go</code></li>
+			<li>Add <code>downloadCmd()</code> cobra.Command</li>
+			<li>Parse <code>id</code> positional arg + <code>--output</code>, <code>--json</code> flags</li>
+			<li>Call <code>PageService.GetPage(id, include_content=true)</code></li>
+			<li>Write bytes to file (default: <code>&lt;id&gt;.html</code>, or <code>--output</code> value)</li>
+			<li>Output file path to stdout (plain or JSON)</li>
+			<li>Register in <code>root.AddCommand(...)</code></li>
+		</ul>
+
+		<h3>2. Handle errors gracefully <span class="priority medium">MEDIUM</span></h3>
+		<ul>
+			<li>Check file write permissions before RPC call</li>
+			<li>Validate output path (prevent directory traversal)</li>
+			<li>Preserve error messages from GetPage (not found, auth, etc.)</li>
+		</ul>
+
+		<h3>3. Document in AGENTS.md <span class="priority high">HIGH</span></h3>
+		<ul>
+			<li>Add "Downloading a report" section with examples</li>
+			<li>Mention use case (retrieve previous plans for reference)</li>
+			<li>Show JSON output format</li>
+		</ul>
+
+		<h3>4. Test coverage <span class="priority medium">MEDIUM</span></h3>
+		<ul>
+			<li>Unit test: command flag parsing</li>
+			<li>Integration: mock GetPage RPC response + file write</li>
+			<li>Edge cases: missing id, write permission denied, invalid output path</li>
+		</ul>
+	</div>
+
+	<div class="section">
+		<h2>Files Modified</h2>
+		<ol>
+			<li><code>cmd/pr/main.go</code> — add <code>downloadCmd()</code>, register in root</li>
+			<li><code>AGENTS.md</code> — add "Downloading a report" section</li>
+			<li>Tests (new or existing test file)</li>
+		</ol>
+	</div>
+
+	<div class="section">
+		<h2>Proto Changes</h2>
+		<p>None required — <code>GetPage</code> RPC already supports <code>include_content</code> flag.</p>
+	</div>
+
+	<div class="section">
+		<h2>Success Criteria</h2>
+		<ul>
+			<li>✅ <code>pr download &lt;id&gt;</code> saves HTML to <code>&lt;id&gt;.html</code></li>
+			<li>✅ <code>pr download &lt;id&gt; --output custom.html</code> respects output path</li>
+			<li>✅ <code>pr download &lt;id&gt; --json</code> outputs valid JSON with path, id, title</li>
+			<li>✅ Errors (not found, auth) print to stderr with exit code 1</li>
+			<li>✅ AGENTS.md documents the feature with examples</li>
+		</ul>
+	</div>
+
+	<div class="section">
+		<h2>Timeline</h2>
+		<ul>
+			<li>Implementation: 30–45 min (command + error handling)</li>
+			<li>Testing: 15–20 min</li>
+			<li>Documentation: 10 min</li>
+		</ul>
+	</div>
+</body>
+</html>

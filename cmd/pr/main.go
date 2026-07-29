@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -56,8 +57,8 @@ func main() {
 		return err
 	}
 
-	root.AddCommand(loginCmd(), logoutCmd(), uploadCmd(), listCmd(), deleteCmd(), pruneCmd(),
-		versionCmd())
+	root.AddCommand(loginCmd(), logoutCmd(), uploadCmd(), listCmd(), getCmd(), deleteCmd(),
+		pruneCmd(), versionCmd())
 
 	if err := root.Execute(); err != nil {
 		msg := err.Error()
@@ -232,6 +233,90 @@ func listCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "output JSON")
 	return cmd
+}
+
+func getCmd() *cobra.Command {
+	var output string
+	var meta, asJSON, force bool
+	cmd := &cobra.Command{
+		Use:   "get <id>",
+		Short: "Download a page's HTML (stdout by default)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if asJSON && !meta {
+				return errors.New("--json requires --meta")
+			}
+			c, err := authedClient()
+			if err != nil {
+				return err
+			}
+			resp, err := c.GetPage(cmd.Context(), connect.NewRequest(&pagereportv1.GetPageRequest{
+				Id:             args[0],
+				IncludeContent: !meta,
+			}))
+			if err != nil {
+				return err
+			}
+			m := resp.Msg.GetMeta()
+			if meta {
+				return printMeta(m, asJSON)
+			}
+
+			content := resp.Msg.GetContent()
+			if len(content) == 0 {
+				return fmt.Errorf("page %s returned no content", args[0])
+			}
+			if output == "" || output == "-" {
+				_, err = os.Stdout.Write(content)
+				return err
+			}
+			if !force {
+				if _, err := os.Stat(output); err == nil {
+					return fmt.Errorf("%s already exists; pass --force to overwrite", output)
+				} else if !errors.Is(err, fs.ErrNotExist) {
+					return err
+				}
+			}
+			if err := os.WriteFile(output, content, 0o644); err != nil {
+				return err
+			}
+			// stderr, so stdout stays clean for pipelines.
+			fmt.Fprintf(os.Stderr, "Wrote %d bytes to %s\n", len(content), output)
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&output, "output", "o", "",
+		`write HTML to this file ("-" means stdout)`)
+	cmd.Flags().BoolVar(&meta, "meta", false, "print page metadata only, no content")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "output JSON metadata (requires --meta)")
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing output file")
+	return cmd
+}
+
+// printMeta renders one page's metadata, using the same field names as
+// `pr list --json` plus content_type.
+func printMeta(p *pagereportv1.PageMeta, asJSON bool) error {
+	createdAt := time.Unix(p.GetCreatedAt(), 0).UTC().Format(time.RFC3339)
+	if asJSON {
+		return printJSON(map[string]any{
+			"id":           p.GetId(),
+			"title":        p.GetTitle(),
+			"content_type": p.GetContentType(),
+			"size_bytes":   p.GetSizeBytes(),
+			"created_at":   createdAt,
+			"created_by":   p.GetCreatedBy(),
+			"url":          p.GetUrl(),
+		})
+	}
+	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	fmt.Fprintf(tw, "ID\t%s\n", p.GetId())
+	fmt.Fprintf(tw, "TITLE\t%s\n", p.GetTitle())
+	fmt.Fprintf(tw, "CONTENT_TYPE\t%s\n", p.GetContentType())
+	fmt.Fprintf(tw, "SIZE\t%d\n", p.GetSizeBytes())
+	fmt.Fprintf(tw, "CREATED\t%s\n", createdAt)
+	fmt.Fprintf(tw, "CREATED_BY\t%s\n", p.GetCreatedBy())
+	fmt.Fprintf(tw, "URL\t%s\n", p.GetUrl())
+	return tw.Flush()
 }
 
 func deleteCmd() *cobra.Command {

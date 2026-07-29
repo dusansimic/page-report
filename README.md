@@ -70,6 +70,7 @@ echo 'server_url: https://app.example.org' > ~/.config/page-report/config.yml
 pr login                          # OAuth device flow against your IdP
 pr upload report.html --title "Weekly metrics"   # prints the page URL
 pr list [--json]
+pr get <id> -o report.html        # download stored HTML (stdout by default)
 pr delete <id>
 pr prune --older-than 30d
 pr logout

@@ -1,0 +1,26 @@
+=== Plan Upload Demo ===
+
+File: test-plan.html (1.2 KB)
+Title: "Implementation Plan: CLI Download Feature"
+
+Command:
+$ pr upload test-plan.html --title "Implementation Plan: CLI Download Feature" --server "http://localhost:8080"
+
+Expected Response (once server is running):
+https://pages.localhost/p/abc123-def456
+
+Or with --json flag:
+$ pr upload test-plan.html --title "Implementation Plan: CLI Download Feature" --json
+{
+  "id": "abc123-def456",
+  "url": "https://pages.localhost/p/abc123-def456"
+}
+
+Once uploaded, retrieve with:
+$ pr download abc123-def456 --output fetched-plan.html
+
+To start the stack locally:
+1. Set .env variables (APP_DOMAIN, PAGES_DOMAIN, credentials)
+2. docker compose up --build
+3. Configure /etc/hosts or use *.localhost (if Caddy is set up)
+4. Run: pr upload test-plan.html --title "..." --server "http://app.localhost"

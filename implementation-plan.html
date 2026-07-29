@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plan Download CLI Feature Implementation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      line-height: 1.6;
+      padding: 2rem;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 2rem; margin-bottom: 1rem; color: #fff; }
+    h2 { font-size: 1.5rem; margin-top: 2rem; margin-bottom: 0.75rem; color: #e0f2fe; }
+    h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem; color: #bae6fd; }
+    p { margin-bottom: 0.75rem; }
+    code { background: #1e293b; padding: 0.2em 0.5em; border-radius: 3px; font-family: 'Monaco', monospace; font-size: 0.9em; }
+    pre {
+      background: #1e293b;
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 1rem 0;
+      border-left: 3px solid #3b82f6;
+    }
+    ul, ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.5rem; }
+    .section { background: #1e293b; padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem; }
+    .status { color: #86efac; font-weight: bold; }
+    .todo { color: #fca5a5; }
+    .info { color: #93c5fd; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+    th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #334155; }
+    th { background: #0f172a; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🚀 CLI Plan Download Feature</h1>
+    <p><strong>Objective:</strong> Add ability for users to download previously uploaded plan HTML files from the page-report service via CLI.</p>
+
+    <div class="section">
+      <h2>📋 Feature Overview</h2>
+      <p>Extend the <code>pr</code> CLI with a <code>download</code> command to retrieve published plan files by ID or name, enabling agents to programmatically fetch their previous outputs without web UI access.</p>
+
+      <table>
+        <tr>
+          <th>Component</th>
+          <th>Current State</th>
+          <th>Change Required</th>
+        </tr>
+        <tr>
+          <td>CLI</td>
+          <td>Upload-only (upload.go)</td>
+          <td>Add download.go command</td>
+        </tr>
+        <tr>
+          <td>Proto API</td>
+          <td>CreatePage RPC only</td>
+          <td>Add GetPage RPC</td>
+        </tr>
+        <tr>
+          <td>Server</td>
+          <td>Page storage + serving</td>
+          <td>Expose GetPage handler</td>
+        </tr>
+        <tr>
+          <td>Database</td>
+          <td>pages table exists</td>
+          <td>Verify ID/name queries</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>🔧 Implementation Phases</h2>
+
+      <h3>Phase 1: Proto Contract (30min)</h3>
+      <ul>
+        <li><span class="status">Define</span> <code>GetPageRequest</code> message (id + optional name_pattern)</li>
+        <li><span class="status">Define</span> <code>GetPageResponse</code> message (id, name, content, created_at, mime_type)</li>
+        <li><span class="status">Add</span> <code>rpc GetPage</code> to PageReportService</li>
+        <li><span class="status">Run</span> <code>buf lint && buf generate</code></li>
+        <li>Commit: <code>feat(proto): add GetPage RPC for plan download</code></li>
+      </ul>
+
+      <h3>Phase 2: Server RPC Handler (45min)</h3>
+      <ul>
+        <li><span class="status">Implement</span> <code>GetPage</code> handler in <code>internal/server</code></li>
+        <li><span class="status">Query</span> store by ID or name pattern</li>
+        <li><span class="status">Auth check</span> via bearer token (existing validator)</li>
+        <li><span class="status">Return</span> page content + metadata</li>
+        <li><span class="status">Error handling</span>: not found, unauthorized</li>
+        <li>Commit: <code>feat(server): implement GetPage RPC handler</code></li>
+      </ul>
+
+      <h3>Phase 3: CLI Command (30min)</h3>
+      <ul>
+        <li><span class="status">Create</span> <code>cmd/pr/download.go</code> (cobra Command)</li>
+        <li><span class="status">Flags</span>: <code>--id</code>, <code>--name</code>, <code>--output</code> (default: stdout or file)</li>
+        <li><span class="status">Connect</span> to server using existing client config</li>
+        <li><span class="status">Call</span> GetPage, write to disk/stdout</li>
+        <li><span class="status">Error output</span> to stderr, exit codes</li>
+        <li>Commit: <code>feat(cli): add download command for plan retrieval</code></li>
+      </ul>
+
+      <h3>Phase 4: Tests & Docs (1h)</h3>
+      <ul>
+        <li><span class="status">Write</span> server integration tests</li>
+        <li><span class="status">Write</span> CLI e2e test (upload → download → compare)</li>
+        <li><span class="status">Update</span> README with download usage</li>
+        <li><span class="status">Update</span> AGENTS.md with pr tool docs</li>
+        <li>Commit: <code>test(download): add integration + e2e tests</code></li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>📐 Architecture Details</h2>
+
+      <h3>Proto Changes</h3>
+      <pre>rpc GetPage (GetPageRequest) returns (GetPageResponse) {}
+
+message GetPageRequest {
+  string id = 1;              // page UUID (required)
+  string name_pattern = 2;    // optional: filter by name prefix
+}
+
+message GetPageResponse {
+  string id = 1;
+  string name = 2;
+  bytes content = 3;          // HTML binary
+  google.protobuf.Timestamp created_at = 4;
+  string mime_type = 5;       // "text/html" usually
+}</pre>
+
+      <h3>Server Handler Signature</h3>
+      <pre>func (s *Service) GetPage(ctx context.Context, req *connect.Request[pagereportv1.GetPageRequest]) (*connect.Response[pagereportv1.GetPageResponse], error)</pre>
+
+      <h3>CLI Usage Examples</h3>
+      <pre>pr download --id abc123                      # stdout
+pr download --id abc123 --output plan.html    # to file
+pr download --name my-plan --server localhost:8080  # custom server</pre>
+    </div>
+
+    <div class="section">
+      <h2>⚠️ Design Decisions</h2>
+      <ul>
+        <li><strong>Query by ID (primary):</strong> Stable, performant, no ambiguity.</li>
+        <li><strong>Name pattern (secondary):</strong> Optional convenience for humans; server returns latest match.</li>
+        <li><strong>Auth:</strong> Reuse existing bearer token from <code>internal/client</code>; same as upload flow.</li>
+        <li><strong>Output:</strong> Default stdout (for piping); <code>--output</code> flag for files. Preserves UNIX philosophy.</li>
+        <li><strong>Store query:</strong> Leverage existing SQLite schema; no migration needed if id + name indexed.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>📦 File Changes Summary</h2>
+      <table>
+        <tr>
+          <th>File</th>
+          <th>Type</th>
+          <th>Action</th>
+        </tr>
+        <tr>
+          <td>proto/pagereport/v1/pagereport.proto</td>
+          <td>Proto</td>
+          <td>Add GetPageRequest, GetPageResponse, rpc GetPage</td>
+        </tr>
+        <tr>
+          <td>gen/pagereport/v1/*.go</td>
+          <td>Generated</td>
+          <td>Auto-regenerated by buf</td>
+        </tr>
+        <tr>
+          <td>internal/server/rpc.go</td>
+          <td>Implementation</td>
+          <td>Add GetPage handler method</td>
+        </tr>
+        <tr>
+          <td>cmd/pr/download.go</td>
+          <td>New File</td>
+          <td>Cobra download command + Connect client call</td>
+        </tr>
+        <tr>
+          <td>cmd/pr/root.go</td>
+          <td>Implementation</td>
+          <td>Register download command</td>
+        </tr>
+        <tr>
+          <td>cmd/pr/*_test.go</td>
+          <td>Tests</td>
+          <td>Add CLI test for download</td>
+        </tr>
+        <tr>
+          <td>internal/server/*_test.go</td>
+          <td>Tests</td>
+          <td>Add RPC handler test</td>
+        </tr>
+        <tr>
+          <td>README.md</td>
+          <td>Docs</td>
+          <td>Usage examples and flags</td>
+        </tr>
+        <tr>
+          <td>AGENTS.md</td>
+          <td>Docs</td>
+          <td>Document pr tool and download flow</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>✅ Acceptance Criteria</h2>
+      <ul>
+        <li><span class="status">✓</span> <code>pr download --id UUID</code> retrieves page from server</li>
+        <li><span class="status">✓</span> Content matches uploaded file (binary-identical)</li>
+        <li><span class="status">✓</span> Auth validates bearer token via existing flow</li>
+        <li><span class="status">✓</span> <code>--output</code> writes to file; no output writes to stdout</li>
+        <li><span class="status">✓</span> Error cases: not found (404), unauthorized (403), malformed ID (400)</li>
+        <li><span class="status">✓</span> E2E test: upload → download → verify content match</li>
+        <li><span class="status">✓</span> README documents command with examples</li>
+        <li><span class="status">✓</span> AGENTS.md documents pr tool usage</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>⏱️ Estimated Timeline</h2>
+      <p><strong>Total: ~2.5 hours</strong></p>
+      <ul>
+        <li>Phase 1 (Proto): 30 min</li>
+        <li>Phase 2 (Server): 45 min</li>
+        <li>Phase 3 (CLI): 30 min</li>
+        <li>Phase 4 (Tests + Docs): 60 min</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>
