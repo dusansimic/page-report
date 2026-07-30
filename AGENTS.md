@@ -115,4 +115,41 @@ docker compose up --build # full stack behind Caddy
 Local dev: set `dev: true` in config, use `app.localhost` / `pages.localhost`
 (Caddy issues self-signed certs; see the commented block in `Caddyfile`).
 
+Compose reads secrets from `.env` / `.env.local`, both gitignored — keep OAuth
+client secrets and `PR_SESSION_SECRET` out of commits.
+
+## Publishing reports with `page-report`
+
+This repo's own CLI doubles as the way agents hand HTML deliverables (plans,
+reports, analyses) to the user: upload the file, show the returned URL.
+
+Server URL precedence: `--server` > `PR_SERVER_URL` > `server_url` in
+`$XDG_CONFIG_HOME/page-report/config.yml`. Credentials live next to that config
+in `credentials.json` (mode `0600`).
+
+```sh
+page-report login                                # once; RFC 8628 device flow
+page-report upload plan.html --title "Some plan" # prints the shareable page URL
+page-report upload plan.html --json              # {"id": "...", "url": "..."}
+page-report list [--json]                        # ids, titles, sizes, URLs
+page-report get <id> [-o file.html] [--meta]     # download HTML (stdout by default)
+page-report delete <id>
+page-report prune --older-than 30d
+```
+
+Agent rules:
+
+- `login` blocks on the user: relay the verification URL **and** code verbatim,
+  then wait for them to approve.
+- The URL from `upload` is the deliverable — always show it. Opening it
+  requires a web login on the pages domain.
+- Uploaded HTML must be self-contained: inline CSS, no external fonts, images,
+  or scripts. The pages domain ships no static assets and serves reports under
+  `pageCSP` (`internal/server/pages.go`).
+- Upload is outward-facing and persists server-side until `delete` — ask before
+  publishing unless the user asked for it.
+- Write generated report files to a scratch dir, not into the repo.
+
+`skills/page-report/SKILL.md` is the fuller agent-facing version of this.
+
 `CLAUDE.md` is a symlink to this file.

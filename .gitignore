@@ -1,5 +1,7 @@
 page-report.db*
 config.yml
+.env
+.env.*
 /page-report
 /pr-server
 *.local.yml

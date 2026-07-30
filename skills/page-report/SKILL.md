@@ -107,6 +107,7 @@ The file must therefore be **fully self-contained**:
 | `page-report logout` | Deletes stored credentials. |
 | `page-report upload <file.html> [--title T] [--json]` | Publishes a page; prints its URL. |
 | `page-report list [--json]` | Every page on the server, newest first. |
+| `page-report get <id> [-o F] [--meta] [--json]` | Downloads a page's HTML; stdout unless `-o`. |
 | `page-report delete <id>` | Removes one page. No confirmation prompt. |
 | `page-report prune --older-than <dur>` | Removes all pages older than `dur`. No confirmation prompt. |
 | `page-report update [--check] [--force] [--json]` | Self-updates the binary from the latest GitHub release. |
@@ -121,6 +122,13 @@ Global flags: `--server <url>`, `--config <path>`. Anything else:
 shapes of every `--json` output.
 
 `--older-than` accepts Go durations plus a `d` suffix: `30d`, `720h`, `90m`.
+
+`get` writes the stored HTML to stdout by default, so it pipes; `-o <file>`
+writes a file instead (refused if the file exists, unless `--force`) and the
+confirmation goes to stderr. `--meta` fetches metadata only — same fields as
+`list --json`, plus `content_type` — and `--json` is only valid together with
+`--meta`. Use it to recover a report published in an earlier session: take the
+id from `list`, or from the `/p/<id>` segment of the page URL.
 
 `update` refuses to touch a `dev` build unless `--force`, verifies the
 download against the release `checksums.txt` and test-runs it before replacing
