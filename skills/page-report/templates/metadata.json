@@ -1,0 +1,81 @@
+{
+  "$comment": "Machine-readable reference for the page-report CLI: command surface and the exact shape of every --json output. Parse --json, never the human table.",
+  "cli": "page-report",
+  "global_flags": {
+    "--server": "server base URL (app domain); overrides PR_SERVER_URL and the config file",
+    "--config": "config file path; default $XDG_CONFIG_HOME/page-report/config.yml"
+  },
+  "config": {
+    "file": "$XDG_CONFIG_HOME/page-report/config.yml",
+    "credentials": "$XDG_CONFIG_HOME/page-report/credentials.json",
+    "keys": { "server_url": "app-domain base URL, also settable via PR_SERVER_URL" },
+    "precedence": ["--server", "PR_SERVER_URL", "config file"]
+  },
+  "commands": {
+    "login": { "args": [], "flags": [], "json": false, "blocks_on_user": true },
+    "logout": { "args": [], "flags": [], "json": false },
+    "upload": {
+      "args": ["<file.html>"],
+      "flags": ["--title", "--json"],
+      "stdout": "the page URL, one line",
+      "json_output": { "id": "string", "url": "string" }
+    },
+    "list": {
+      "args": [],
+      "flags": ["--json"],
+      "stdout": "table: ID CREATED SIZE CREATED_BY TITLE",
+      "json_output": [
+        {
+          "id": "string",
+          "title": "string",
+          "size_bytes": "number",
+          "created_at": "RFC3339 UTC timestamp",
+          "created_by": "string (identity)",
+          "url": "string"
+        }
+      ]
+    },
+    "delete": { "args": ["<id>"], "flags": [], "destructive": true, "confirms": false },
+    "prune": {
+      "args": [],
+      "flags": ["--older-than (required)"],
+      "duration_format": "Go duration plus a d suffix, e.g. 30d, 720h, 90m",
+      "destructive": true,
+      "confirms": false,
+      "scope": "server-wide, not per user"
+    },
+    "update": {
+      "args": [],
+      "flags": ["--check", "--force", "--json"],
+      "json_output": { "current": "string", "latest": "string", "update_available": "boolean" },
+      "notes": "--json applies with --check; refuses dev builds without --force"
+    },
+    "version": {
+      "args": [],
+      "flags": ["--json"],
+      "json_output": {
+        "version": "string",
+        "commit": "string",
+        "date": "string",
+        "go": "string",
+        "platform": "GOOS/GOARCH"
+      }
+    }
+  },
+  "upload_constraints": {
+    "max_bytes": 5242880,
+    "max_bytes_note": "server-side max_upload_bytes; default 5 MiB",
+    "empty_rejected": true,
+    "immutable": true,
+    "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+  },
+  "errors": {
+    "unauthenticated": "no or expired credentials; run page-report login",
+    "token expired and no refresh token stored": "re-login required",
+    "server URL required": "no --server, PR_SERVER_URL or server_url",
+    "invalid server URL": "must be an absolute http(s) URL",
+    "content exceeds max upload size": "file over max_upload_bytes",
+    "content must not be empty": "0-byte upload",
+    "invalid duration": "bad --older-than value"
+  }
+}

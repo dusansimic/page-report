@@ -110,6 +110,21 @@ page-report logout
 page-report update                         # self-update to the latest release
 ```
 
+### Agent skill
+
+The repo ships an agent skill that teaches this flow to coding agents. Install
+it into a project with:
+
+```sh
+npx skills add dusansimic/page-report
+```
+
+It lives in `skills/page-report/`: `SKILL.md` (commands, CSP rules for the
+uploaded HTML, troubleshooting), `examples/` (runnable shell scripts for
+single/batch upload, scheduled prune, and a full agent loop) and `templates/`
+(a CSP-safe report template plus a machine-readable `metadata.json` describing
+every `--json` output).
+
 ## Configuration
 
 ### CLI
@@ -176,7 +191,6 @@ pre-commit install              # once; hooks: gofmt, vet, mod-tidy, buf
 ```
 
 See `AGENTS.md` for conventions (package boundaries, migrations, config).
-The agent skill lives in `skill/SKILL.md`.
 
 ## License
 

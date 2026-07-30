@@ -21,7 +21,7 @@ One Go module, two binaries.
 | `web/static` | embedded app-domain homepage assets (served verbatim) |
 | `web/templates` | `html/template` sources rendered by `internal/server` |
 | `migrations/` | numbered SQL migration pairs, embedded into the binary |
-| `skill/SKILL.md` | agent skill teaching the upload flow |
+| `skills/page-report/` | agent skill (`SKILL.md`, `examples/`, `templates/`) teaching the upload flow |
 | `install.sh` | POSIX curl-to-shell installer for the CLI |
 
 Package boundaries: `internal/client` is imported only by `cmd/page-report`;
