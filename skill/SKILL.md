@@ -7,7 +7,7 @@ description: Publish static HTML reports to a page-report server and share the U
 
 ## Prerequisites
 
-- The `pr` binary is in PATH.
+- The `page-report` binary is in PATH.
 - The server URL is configured, in any of three ways (highest precedence
   first): `--server <app-domain-url>` on every command, `PR_SERVER_URL` in the
   environment, or `server_url: <app-domain-url>` in
@@ -18,7 +18,7 @@ description: Publish static HTML reports to a page-report server and share the U
 Authentication uses an OAuth device flow. Run:
 
 ```sh
-pr login
+page-report login
 ```
 
 The command prints a verification URL and a code, for example:
@@ -35,7 +35,7 @@ when a command fails with an authentication error.
 ## Publishing a report
 
 ```sh
-pr upload report.html --title "Weekly metrics"
+page-report upload report.html --title "Weekly metrics"
 ```
 
 On success, stdout is a single line: the shareable URL of the page.
@@ -47,14 +47,14 @@ Use `--json` to get `{"id": "...", "url": "..."}` instead.
 ## Managing pages
 
 ```sh
-pr list                    # table of all pages (--json for JSON)
-pr delete <id>             # remove one page
-pr prune --older-than 30d  # remove pages older than a duration (e.g. 30d, 720h)
+page-report list                    # table of all pages (--json for JSON)
+page-report delete <id>             # remove one page
+page-report prune --older-than 30d  # remove pages older than a duration (e.g. 30d, 720h)
 ```
 
 ## Troubleshooting
 
-- `unauthenticated` error / hint about login → run `pr login` again and relay
-  the verification code to the user.
+- `unauthenticated` error / hint about login → run `page-report login` again
+  and relay the verification code to the user.
 - "server URL required" → pass `--server`, set `PR_SERVER_URL`, or set
   `server_url` in `~/.config/page-report/config.yml`.

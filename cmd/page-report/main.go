@@ -1,4 +1,4 @@
-// Command pr is the CLI AI agents use to publish and manage report pages on a
+// Command page-report is the CLI AI agents use to publish and manage report pages on a
 // page-report server.
 package main
 
@@ -39,13 +39,13 @@ var (
 
 func main() {
 	root := &cobra.Command{
-		Use:           "pr",
+		Use:           "page-report",
 		Short:         "Publish and manage HTML report pages on a page-report server",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Version:       versionString(),
 	}
-	root.SetVersionTemplate("pr {{.Version}}\n")
+	root.SetVersionTemplate("page-report {{.Version}}\n")
 	root.PersistentFlags().StringVar(&serverURL, "server", "",
 		"page-report server base URL (app domain); falls back to PR_SERVER_URL, then the config file")
 	root.PersistentFlags().StringVar(&configPath, "config", "",
@@ -62,7 +62,7 @@ func main() {
 	if err := root.Execute(); err != nil {
 		msg := err.Error()
 		if connect.CodeOf(err) == connect.CodeUnauthenticated {
-			msg += "\nhint: run `pr login` first"
+			msg += "\nhint: run `page-report login` first"
 		}
 		fmt.Fprintln(os.Stderr, "error:", msg)
 		os.Exit(1)
@@ -300,7 +300,7 @@ func versionCmd() *cobra.Command {
 					"platform": runtime.GOOS + "/" + runtime.GOARCH,
 				})
 			}
-			fmt.Printf("pr %s\n", v)
+			fmt.Printf("page-report %s\n", v)
 			if c != "" {
 				fmt.Printf("commit:   %s\n", c)
 			}

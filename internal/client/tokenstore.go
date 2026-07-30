@@ -25,7 +25,7 @@ type Credentials struct {
 }
 
 // ErrNotLoggedIn is returned when no stored credentials exist.
-var ErrNotLoggedIn = errors.New("not logged in: run `pr login` first")
+var ErrNotLoggedIn = errors.New("not logged in: run `page-report login` first")
 
 func credentialsPath() (string, error) {
 	dir, err := configDir()
@@ -100,11 +100,11 @@ func (StoredTokenSource) Token(ctx context.Context) (string, error) {
 	if creds.Provider == "oidc" && !creds.Expiry.IsZero() &&
 		time.Until(creds.Expiry) < time.Minute {
 		if creds.RefreshToken == "" {
-			return "", errors.New("token expired and no refresh token stored: run `pr login`")
+			return "", errors.New("token expired and no refresh token stored: run `page-report login`")
 		}
 		creds, err = refresh(ctx, creds)
 		if err != nil {
-			return "", fmt.Errorf("token refresh failed (run `pr login`): %w", err)
+			return "", fmt.Errorf("token refresh failed (run `page-report login`): %w", err)
 		}
 	}
 

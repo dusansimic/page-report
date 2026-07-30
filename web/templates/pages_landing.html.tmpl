@@ -62,7 +62,7 @@
     <h1>page-report</h1>
     <p>
       This domain serves single-page HTML reports published with the
-      <code>pr</code> command-line tool. Every report link requires a login from
+      <code>page-report</code> command-line tool. Every report link requires a login from
       the server's allowlist &mdash; page URLs are random, but they are not the
       access control, so a link alone grants nobody access.
     </p>
@@ -91,19 +91,19 @@
     </p>
     <pre><code>git clone {{.RepoURL}}.git
 cd page-report
-go build -o pr ./cmd/pr</code></pre>
+go build -o page-report ./cmd/page-report</code></pre>
 
     <h2>Point it at this server</h2>
     <pre><code>export PR_SERVER_URL={{.AppBaseURL}}</code></pre>
     <p>Every command also accepts <code>--server {{.AppBaseURL}}</code> instead.</p>
 
     <h2>Publish and manage reports</h2>
-    <pre><code>pr login                                        # device-flow login via the IdP
-pr upload report.html --title "Weekly metrics"  # prints the shareable report URL
-pr list                                         # add --json for machine output
-pr delete &lt;id&gt;
-pr prune --older-than 30d                       # --older-than is required
-pr logout                                       # forget stored credentials</code></pre>
+    <pre><code>page-report login                                        # device-flow login via the IdP
+page-report upload report.html --title "Weekly metrics"  # prints the shareable report URL
+page-report list                                         # add --json for machine output
+page-report delete &lt;id&gt;
+page-report prune --older-than 30d                       # --older-than is required
+page-report logout                                       # forget stored credentials</code></pre>
 
     <h2>Source</h2>
     <p><a href="{{.RepoURL}}">{{.RepoURL}}</a></p>

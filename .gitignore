@@ -1,6 +1,6 @@
 page-report.db*
 config.yml
-/pr
+/page-report
 /pr-server
 *.local.yml
 .claude/

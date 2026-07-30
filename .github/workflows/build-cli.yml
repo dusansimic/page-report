@@ -8,7 +8,7 @@ on:
     tags: ['v*']
   pull_request:
     paths:
-      - cmd/pr/**
+      - cmd/page-report/**
       - internal/client/**
       - internal/config/**
       - internal/auth/**
@@ -60,13 +60,13 @@ jobs:
               -X main.version=${{ steps.meta.outputs.version }} \
               -X main.commit=${{ github.sha }} \
               -X main.date=${{ steps.meta.outputs.date }}" \
-            -o dist/pr ./cmd/pr
-          ./dist/pr version
+            -o dist/page-report ./cmd/page-report
+          ./dist/page-report version
 
       - uses: actions/upload-artifact@v7
         with:
-          name: pr-linux-amd64
-          path: dist/pr
+          name: page-report-linux-amd64
+          path: dist/page-report
           if-no-files-found: error
           retention-days: 30
 
@@ -81,21 +81,21 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          name: pr-linux-amd64
+          name: page-report-linux-amd64
           path: dist
 
       - name: Package
         run: |
-          chmod +x dist/pr
+          chmod +x dist/page-report
           cp README.md LICENSE dist/
-          tar -czf "pr_${{ github.ref_name }}_linux_amd64.tar.gz" \
-            -C dist pr README.md LICENSE
-          sha256sum pr_*.tar.gz > checksums.txt
+          tar -czf "page-report_${{ github.ref_name }}_linux_amd64.tar.gz" \
+            -C dist page-report README.md LICENSE
+          sha256sum page-report_*.tar.gz > checksums.txt
 
       - uses: softprops/action-gh-release@v3
         with:
           files: |
-            pr_*.tar.gz
+            page-report_*.tar.gz
             checksums.txt
           generate_release_notes: true
           fail_on_unmatched_files: true
