@@ -57,7 +57,7 @@ func main() {
 	}
 
 	root.AddCommand(loginCmd(), logoutCmd(), uploadCmd(), listCmd(), deleteCmd(), pruneCmd(),
-		versionCmd())
+		updateCmd(), versionCmd())
 
 	if err := root.Execute(); err != nil {
 		msg := err.Error()

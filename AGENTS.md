@@ -22,6 +22,7 @@ One Go module, two binaries.
 | `web/templates` | `html/template` sources rendered by `internal/server` |
 | `migrations/` | numbered SQL migration pairs, embedded into the binary |
 | `skill/SKILL.md` | agent skill teaching the upload flow |
+| `install.sh` | POSIX curl-to-shell installer for the CLI |
 
 Package boundaries: `internal/client` is imported only by `cmd/page-report`;
 `internal/server` and `internal/store` only by `cmd/pr-server`.
@@ -55,6 +56,21 @@ underscores (`oidc.client_id` → `PR_OIDC_CLIENT_ID`); every key is explicitly
   `configDir()` there is the single source of truth for the XDG dir, shared with
   the credential store. Server URL precedence: `--server` > `PR_SERVER_URL` >
   config file.
+
+## Release assets
+
+Three places agree on one naming scheme and must be changed together:
+`.github/workflows/build-cli.yml` (Package step), `install.sh`, and
+`internal/client/selfupdate.go` (`AssetName`). Assets are
+`page-report_<tag>_<os>_<arch>.tar.gz` plus a `checksums.txt` of `sha256sum`
+lines; both the installer and `page-report update` refuse to install anything
+missing from `checksums.txt`. Adding a platform means adding a matrix entry —
+nothing else.
+
+Self-update replaces the binary by writing `.page-report.new` next to it and
+renaming over the target, so the install dir must be writable and on one
+filesystem; the old binary is untouched until the download is verified and
+test-run.
 
 ## Templates
 

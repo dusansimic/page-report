@@ -10,6 +10,7 @@ require (
 	github.com/markbates/goth v1.82.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
+	golang.org/x/mod v0.36.0
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/protobuf v1.36.11
 	modernc.org/sqlite v1.53.0

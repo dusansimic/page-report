@@ -23,10 +23,37 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - run: go test ./...
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
     steps:
       - uses: actions/checkout@v7
         with:
@@ -47,13 +74,11 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
-      - run: go test ./...
-
       - name: Build
         env:
           CGO_ENABLED: '0'
-          GOOS: linux
-          GOARCH: amd64
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
         run: |
           go build -trimpath \
             -ldflags="-s -w \
@@ -61,11 +86,15 @@ jobs:
               -X main.commit=${{ github.sha }} \
               -X main.date=${{ steps.meta.outputs.date }}" \
             -o dist/page-report ./cmd/page-report
-          ./dist/page-report version
+
+      # Only the native build can be executed on the runner.
+      - name: Smoke test
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: ./dist/page-report version
 
       - uses: actions/upload-artifact@v7
         with:
-          name: page-report-linux-amd64
+          name: page-report-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/page-report
           if-no-files-found: error
           retention-days: 30
@@ -81,16 +110,26 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          name: page-report-linux-amd64
-          path: dist
+          pattern: page-report-*
+          path: artifacts
 
+      # One tarball per platform, named the way install.sh and
+      # `page-report update` expect: page-report_<tag>_<os>_<arch>.tar.gz.
       - name: Package
         run: |
-          chmod +x dist/page-report
-          cp README.md LICENSE dist/
-          tar -czf "page-report_${{ github.ref_name }}_linux_amd64.tar.gz" \
-            -C dist page-report README.md LICENSE
+          set -eu
+          for dir in artifacts/page-report-*; do
+            platform="${dir#artifacts/page-report-}"
+            os="${platform%-*}"
+            arch="${platform##*-}"
+            mkdir -p "pkg/$platform"
+            cp "$dir/page-report" README.md LICENSE "pkg/$platform/"
+            chmod +x "pkg/$platform/page-report"
+            tar -czf "page-report_${{ github.ref_name }}_${os}_${arch}.tar.gz" \
+              -C "pkg/$platform" page-report README.md LICENSE
+          done
           sha256sum page-report_*.tar.gz > checksums.txt
+          cat checksums.txt
 
       - uses: softprops/action-gh-release@v3
         with:

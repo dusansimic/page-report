@@ -56,14 +56,46 @@ PR_OIDC_CLIENT_SECRET=...
 
 ## CLI
 
-Grab a `linux/amd64` binary from the [latest release][releases] (tarball plus
-`checksums.txt`), or build it yourself with
-`go build -o page-report ./cmd/page-report`. Untagged builds of `main` are also
-uploaded as the `page-report-linux-amd64` artifact on every
-[Build CLI][build-cli] run. `page-report version` reports the build metadata.
+### Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dusansimic/page-report/main/install.sh | sh
+```
+
+The script picks the release asset for your platform, verifies its sha256
+against the release `checksums.txt`, and installs the binary into
+`~/.local/bin` (add that to your `PATH` if it isn't there). Two knobs:
+
+| Env var | Default | Description |
+|---|---|---|
+| `PR_VERSION` | latest release | release tag to install, e.g. `v0.2.0` |
+| `PR_INSTALL_DIR` | `$HOME/.local/bin` | where to put the binary |
+
+Alternatives: grab a tarball from the [latest release][releases] by hand
+(`linux` and `darwin`, `amd64` and `arm64`), or build from source with
+`go build -o page-report ./cmd/page-report`. Untagged builds of `main` are
+uploaded as `page-report-<os>-<arch>` artifacts on every [Build CLI][build-cli]
+run. `page-report version` reports the build metadata.
 
 [releases]: https://github.com/dusansimic/page-report/releases
 [build-cli]: https://github.com/dusansimic/page-report/actions/workflows/build-cli.yml
+
+### Updating
+
+```sh
+page-report update            # replace this binary with the latest release
+page-report update --check    # report current vs latest, change nothing (--json for scripts)
+page-report update --force    # reinstall the latest release even if it is not newer
+```
+
+The new binary is downloaded, checksum-verified and test-run before it
+replaces the old one, so a failed update leaves the working binary in place.
+Binaries built from source report a pseudo-version and `update` will happily
+replace them with the latest release; if the install directory isn't writable
+(a system-wide or package-manager install), `update` says so instead of
+half-updating.
+
+### Usage
 
 ```sh
 mkdir -p ~/.config/page-report
@@ -75,6 +107,7 @@ page-report list [--json]
 page-report delete <id>
 page-report prune --older-than 30d
 page-report logout
+page-report update                         # self-update to the latest release
 ```
 
 ## Configuration
