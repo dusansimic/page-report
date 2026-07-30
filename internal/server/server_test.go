@@ -353,6 +353,44 @@ func TestUploadAndLifecycle(t *testing.T) {
 		t.Fatalf("list: %v, %d pages", err, len(list.Msg.GetPages()))
 	}
 
+	// GetPage with content: the exact bytes uploaded, plus full metadata. This
+	// is the contract `page-report get` relies on.
+	got, err := c.GetPage(ctx, connect.NewRequest(&pagereportv1.GetPageRequest{
+		Id:             id,
+		IncludeContent: true,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got.Msg.GetContent()) != "<html>report</html>" {
+		t.Fatalf("get content = %q", got.Msg.GetContent())
+	}
+	meta := got.Msg.GetMeta()
+	if meta.GetId() != id || meta.GetTitle() != "Report" ||
+		meta.GetUrl() != "https://pages.example.org/p/"+id ||
+		meta.GetSizeBytes() != int64(len("<html>report</html>")) ||
+		meta.GetCreatedBy() != "me@example.org" {
+		t.Fatalf("get meta = %+v", meta)
+	}
+
+	// Without include_content the metadata is still complete, content omitted.
+	metaOnly, err := c.GetPage(ctx, connect.NewRequest(&pagereportv1.GetPageRequest{Id: id}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(metaOnly.Msg.GetContent()) != 0 {
+		t.Fatalf("get without include_content returned %d bytes", len(metaOnly.Msg.GetContent()))
+	}
+	if metaOnly.Msg.GetMeta().GetId() != id {
+		t.Fatalf("meta-only id = %q", metaOnly.Msg.GetMeta().GetId())
+	}
+
+	if _, err := c.GetPage(ctx, connect.NewRequest(&pagereportv1.GetPageRequest{
+		Id: "nosuchid",
+	})); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("get unknown id: got %v, want not_found", err)
+	}
+
 	if _, err := c.DeletePage(ctx, connect.NewRequest(&pagereportv1.DeletePageRequest{Id: id})); err != nil {
 		t.Fatal(err)
 	}
