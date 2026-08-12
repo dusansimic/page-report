@@ -107,8 +107,16 @@ func testServer(t *testing.T, st store.Store, sessions SessionReader, validator 
 }
 
 func doReq(h http.Handler, method, host, path string) *httptest.ResponseRecorder {
+	return doReqHeaders(h, method, host, path, nil)
+}
+
+func doReqHeaders(h http.Handler, method, host, path string,
+	headers map[string]string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, path, nil)
 	r.Host = host
+	for k, v := range headers {
+		r.Header.Set(k, v)
+	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, r)
 	return rec
@@ -262,8 +270,16 @@ func TestPageServedWithHeaders(t *testing.T) {
 	if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
 		t.Error("missing nosniff")
 	}
-	if rec.Header().Get("Content-Security-Policy") == "" {
-		t.Error("missing CSP")
+	// Reports are quarantined in an opaque origin and may not script.
+	csp := rec.Header().Get("Content-Security-Policy")
+	if !strings.HasPrefix(csp, "sandbox ") {
+		t.Errorf("CSP does not sandbox the report: %q", csp)
+	}
+	if strings.Contains(csp, "allow-same-origin") {
+		t.Errorf("sandbox retains the origin: %q", csp)
+	}
+	if strings.Contains(csp, "allow-scripts") || strings.Contains(csp, "script-src") {
+		t.Errorf("CSP permits scripts: %q", csp)
 	}
 
 	// Allowlisted session but unknown page id.
@@ -396,6 +412,134 @@ func TestUploadAndLifecycle(t *testing.T) {
 	}
 	if _, err := c.DeletePage(ctx, connect.NewRequest(&pagereportv1.DeletePageRequest{Id: id})); connect.CodeOf(err) != connect.CodeNotFound {
 		t.Fatalf("double delete: got %v, want not_found", err)
+	}
+}
+
+// bearerClient is the authenticated RPC client the lifecycle tests use, with
+// optional extra headers on every request.
+func bearerClient(ts *httptest.Server, headers map[string]string) pagereportv1connect.PageServiceClient {
+	interceptor := connect.UnaryInterceptorFunc(func(next connect.UnaryFunc) connect.UnaryFunc {
+		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			req.Header().Set("Authorization", "Bearer tok")
+			for k, v := range headers {
+				req.Header().Set(k, v)
+			}
+			return next(ctx, req)
+		}
+	})
+	return pagereportv1connect.NewPageServiceClient(http.DefaultClient, ts.URL,
+		connect.WithProtoJSON(), connect.WithInterceptors(interceptor))
+}
+
+// Uploads may only name content types that browsers render as inert documents.
+// image/svg+xml is the one that matters: it renders as a scriptable document.
+func TestUploadContentTypeAllowlist(t *testing.T) {
+	st := newFakeStore()
+	h := testServer(t, st, fakeSessions{}, fakeValidator{id: auth.Identity{Email: "me@example.org"}})
+	c := bearerClient(rpcTestServer(t, h), nil)
+	ctx := context.Background()
+
+	for _, bad := range []string{
+		"image/svg+xml",
+		"application/xhtml+xml",
+		"text/xml",
+		"application/octet-stream",
+		"not a media type",
+	} {
+		_, err := c.UploadPage(ctx, connect.NewRequest(&pagereportv1.UploadPageRequest{
+			Content: []byte("x"), ContentType: bad,
+		}))
+		if connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Errorf("content type %q: got %v, want invalid_argument", bad, err)
+		}
+	}
+
+	// Accepted types are stored canonicalised, with caller parameters discarded.
+	for _, tc := range []struct{ sent, want string }{
+		{"", contentTypeHTML},
+		{"text/html", contentTypeHTML},
+		{"text/html; charset=iso-8859-1", contentTypeHTML},
+		{"TEXT/HTML", contentTypeHTML},
+		{"text/plain", contentTypeText},
+	} {
+		up, err := c.UploadPage(ctx, connect.NewRequest(&pagereportv1.UploadPageRequest{
+			Content: []byte("x"), ContentType: tc.sent,
+		}))
+		if err != nil {
+			t.Fatalf("content type %q: %v", tc.sent, err)
+		}
+		if got := st.pages[up.Msg.GetId()].ContentType; got != tc.want {
+			t.Errorf("content type %q stored as %q, want %q", tc.sent, got, tc.want)
+		}
+	}
+}
+
+// Rows written before the allowlist existed must never be echoed back unvetted.
+func TestPageContentTypeDowngraded(t *testing.T) {
+	st := newFakeStore()
+	st.pages["legacy"] = store.Page{
+		ID: "legacy", Content: []byte("<svg/>"), ContentType: "image/svg+xml",
+	}
+	st.pages["plain"] = store.Page{
+		ID: "plain", Content: []byte("hi"), ContentType: "text/plain",
+	}
+	h := testServer(t, st, fakeSessions{id: auth.Identity{Email: "me@example.org"}, ok: true}, fakeValidator{})
+
+	rec := doReq(h, "GET", "pages.example.org", "/p/legacy")
+	if got := rec.Header().Get("Content-Type"); got != contentTypeText {
+		t.Errorf("legacy row served as %q, want %q", got, contentTypeText)
+	}
+	rec = doReq(h, "GET", "pages.example.org", "/p/plain")
+	if got := rec.Header().Get("Content-Type"); got != contentTypeText {
+		t.Errorf("text/plain row served as %q, want %q", got, contentTypeText)
+	}
+}
+
+// The sandbox is backed up server-side: a report scripting its way to another
+// report sends Sec-Fetch-Dest: empty and is refused before the store is read.
+func TestSecFetchDestGate(t *testing.T) {
+	st := newFakeStore()
+	st.pages["abc123"] = store.Page{
+		ID: "abc123", Content: []byte("<html>hi</html>"), ContentType: contentTypeHTML,
+	}
+	h := testServer(t, st, fakeSessions{id: auth.Identity{Email: "me@example.org"}, ok: true}, fakeValidator{})
+
+	for _, tc := range []struct {
+		dest string
+		want int
+	}{
+		{"", http.StatusOK},         // non-browser client, header absent
+		{"document", http.StatusOK}, // top-level navigation
+		{"empty", http.StatusForbidden},
+		{"iframe", http.StatusForbidden},
+		{"image", http.StatusForbidden},
+	} {
+		headers := map[string]string{}
+		if tc.dest != "" {
+			headers["Sec-Fetch-Dest"] = tc.dest
+		}
+		rec := doReqHeaders(h, "GET", "pages.example.org", "/p/abc123", headers)
+		if rec.Code != tc.want {
+			t.Errorf("Sec-Fetch-Dest %q: got %d, want %d", tc.dest, rec.Code, tc.want)
+		}
+	}
+}
+
+// The RPC API is bearer-auth and CLI-only; browser-originated calls are refused.
+func TestRPCRejectsBrowserFetch(t *testing.T) {
+	h := testServer(t, newFakeStore(), fakeSessions{},
+		fakeValidator{id: auth.Identity{Email: "me@example.org"}})
+	ts := rpcTestServer(t, h)
+
+	if _, err := bearerClient(ts, nil).ListPages(context.Background(),
+		connect.NewRequest(&pagereportv1.ListPagesRequest{})); err != nil {
+		t.Fatalf("CLI client without Sec-Fetch headers: %v", err)
+	}
+
+	c := bearerClient(ts, map[string]string{"Sec-Fetch-Dest": "empty"})
+	if _, err := c.ListPages(context.Background(),
+		connect.NewRequest(&pagereportv1.ListPagesRequest{})); err == nil {
+		t.Fatal("browser-originated RPC call was allowed")
 	}
 }
 

@@ -78,7 +78,7 @@ func (s *Server) Handler() http.Handler {
 		&rpcService{s: s},
 		s.connectOptions()...,
 	)
-	appMux.Handle(rpcPath, rpcHandler)
+	appMux.Handle(rpcPath, guardScriptedFetch(rpcHandler))
 
 	pagesMux := http.NewServeMux()
 	pagesMux.HandleFunc("GET /{$}", s.handleLanding)
@@ -96,6 +96,35 @@ func (s *Server) Handler() http.Handler {
 		default:
 			http.NotFound(w, r)
 		}
+	})
+}
+
+// denyScriptedFetch rejects requests a browser marks as script-initiated. It
+// backs up the report sandbox from the server side: a report doing
+// fetch("/p/other-id") sends Sec-Fetch-Dest: empty and is refused here even if
+// a CSP header is ever lost in transit. Non-browser clients — the CLI — omit
+// the header entirely and pass through; reports are only ever loaded as
+// top-level documents. It returns true when the request was handled.
+//
+// This also refuses browser-originated calls to the RPC API, which is
+// bearer-auth and CLI-only by design. A future browser web UI would need to
+// relax this.
+func denyScriptedFetch(w http.ResponseWriter, r *http.Request) bool {
+	switch r.Header.Get("Sec-Fetch-Dest") {
+	case "", "document":
+		return false
+	}
+	http.Error(w, "forbidden", http.StatusForbidden)
+	return true
+}
+
+// guardScriptedFetch applies denyScriptedFetch in front of h.
+func guardScriptedFetch(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if denyScriptedFetch(w, r) {
+			return
+		}
+		h.ServeHTTP(w, r)
 	})
 }
 
