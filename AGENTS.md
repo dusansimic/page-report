@@ -77,8 +77,29 @@ test-run.
 Templates live in `web/templates` (a separate embed FS from `web/static`, which
 the app domain serves verbatim) and are parsed once at package init with
 `template.Must(template.ParseFS(...))`. The pages domain ships no static assets
-and no JavaScript, so template CSS is inlined and the response carries a
-`default-src 'none'` CSP.
+and no JavaScript, so template CSS is inlined; the landing page carries a
+`default-src 'none'` CSP (`landingCSP` in `internal/server/landing.go`).
+
+## Report isolation (do not weaken these)
+
+Report HTML is attacker-controlled and shares the pages origin with the login
+page. Three controls keep it inert, layered so that losing one is not fatal:
+
+- **`pageCSP`** (`internal/server/pages.go`) starts with `sandbox allow-popups`.
+  No `allow-same-origin` means the report gets an opaque origin — no
+  `document.cookie`, no reads of other reports, no service worker. No
+  `allow-scripts` means no JS at all. `'self'` is absent from every directive
+  on purpose: an opaque origin matches it against nothing.
+- **Content-type allowlist** (`internal/server/contenttype.go`). Uploads may
+  only name `text/html` or `text/plain`; the value is stored canonicalised and
+  re-checked on serve, degrading to `text/plain` for rows that predate the
+  allowlist. Allowlist, never denylist — the set of MIME types a browser
+  renders as a document is not enumerable in advance.
+- **`denyScriptedFetch`** (`internal/server/server.go`) 403s any request with a
+  `Sec-Fetch-Dest` other than `document`, on `/p/{id}` and on the RPC handler.
+  Non-browser clients omit the header and pass through. This is what still
+  holds if a CSP header is ever lost in transit; it also means the API is
+  unreachable from a browser, which a future web UI would have to relax.
 
 ## Two-domain rule
 
@@ -143,9 +164,10 @@ Agent rules:
   then wait for them to approve.
 - The URL from `upload` is the deliverable — always show it. Opening it
   requires a web login on the pages domain.
-- Uploaded HTML must be self-contained: inline CSS, no external fonts, images,
-  or scripts. The pages domain ships no static assets and serves reports under
-  `pageCSP` (`internal/server/pages.go`).
+- Uploaded HTML must be self-contained and script-free: inline CSS, no external
+  fonts or images, no JavaScript. `pageCSP` sandboxes reports without
+  `allow-scripts`, so `<script>` and `on*` handlers silently do nothing — this
+  is enforced, not advisory. Render charts as inline SVG.
 - Upload is outward-facing and persists server-side until `delete` — ask before
   publishing unless the user asked for it.
 - Write generated report files to a scratch dir, not into the repo.

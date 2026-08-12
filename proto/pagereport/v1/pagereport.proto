@@ -51,7 +51,9 @@ message UploadPageRequest {
   // Raw HTML bytes (base64 in JSON encoding).
   bytes content = 1;
   string title = 2;
-  // Defaults to "text/html; charset=utf-8".
+  // Only "text/html" and "text/plain" are accepted; parameters are ignored
+  // and the value is stored canonicalised with charset=utf-8. Anything else is
+  // rejected with INVALID_ARGUMENT. Defaults to "text/html; charset=utf-8".
   string content_type = 3;
 }
 

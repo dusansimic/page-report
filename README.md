@@ -177,11 +177,18 @@ issuer's JWKS with `audience` (default: the client id).
 
 Every report page requires an authenticated, allowlisted identity — page ids
 are random but are not the access control. Uploaded HTML is treated as
-untrusted: it is served on a dedicated cookieless-API domain with a strict
-CSP, and the session cookie is host-only so report scripts can never reach
-the app domain or its API. Residual risk: a malicious report viewed by an
-authenticated user could fetch *other reports* on the pages domain;
-per-report tokens would close this and are a possible future hardening.
+untrusted, and three layers keep it inert:
+
+- It is served on a dedicated pages domain, separate from the bearer-auth API,
+  with a host-only session cookie that never reaches the app domain.
+- Reports are served with a `sandbox` CSP and no `allow-same-origin` or
+  `allow-scripts`, so each one renders in an opaque origin: no JavaScript, no
+  access to the session cookie, no reads of other reports, no service worker.
+- Uploads may only declare `text/html` or `text/plain`; the value is stored
+  canonicalised and re-checked when served, so content cannot be smuggled in as
+  a scriptable document type such as `image/svg+xml`. Requests carrying a
+  `Sec-Fetch-Dest` other than `document` are refused outright, which backs the
+  sandbox up server-side.
 
 ## Development
 

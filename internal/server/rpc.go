@@ -13,8 +13,6 @@ import (
 	"github.com/dusan/page-report/internal/store"
 )
 
-const defaultContentType = "text/html; charset=utf-8"
-
 // rpcService implements pagereportv1connect.PageServiceHandler.
 type rpcService struct {
 	s *Server
@@ -48,9 +46,14 @@ func (r *rpcService) UploadPage(
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			fmt.Errorf("content exceeds max upload size of %d bytes", r.s.cfg.MaxUploadBytes))
 	}
-	contentType := req.Msg.GetContentType()
-	if contentType == "" {
-		contentType = defaultContentType
+	contentType := defaultContentType
+	if raw := req.Msg.GetContentType(); raw != "" {
+		canonical, ok := canonicalContentType(raw)
+		if !ok {
+			return nil, connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("content type %q is not allowed: use text/html or text/plain", raw))
+		}
+		contentType = canonical
 	}
 	identity, _ := IdentityFrom(ctx)
 	createdBy := identity.Email

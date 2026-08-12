@@ -78,19 +78,24 @@ so do not upload secrets, tokens, or third-party-confidential detail.
 
 ### Writing the HTML
 
-Pages are served under a strict CSP:
+Pages are served sandboxed, in an opaque origin, under a strict CSP:
 
 ```
-default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'
+sandbox allow-popups; default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'; frame-ancestors 'none'
 ```
 
-The file must therefore be **fully self-contained**:
+The file must therefore be **fully self-contained and free of JavaScript**:
 
-- Inline `<style>` and `<script>` are allowed (`unsafe-inline`).
-- External CSS/JS/fonts/images from any CDN are **blocked** — no Tailwind CDN,
-  no Google Fonts, no chart.js from unpkg. Inline the library or skip it.
+- **`<script>` does not run.** Neither do inline `on*` handlers. The sandbox
+  omits `allow-scripts`, so this is enforced by the server, not a convention.
+  Write static HTML; render charts as inline SVG.
+- Inline `<style>` is allowed (`unsafe-inline`). External CSS/JS/fonts/images
+  from any CDN are **blocked** — no Tailwind CDN, no Google Fonts, no chart.js
+  from unpkg. Inline it or skip it.
 - Images: `data:` URIs only; inline SVG is fine.
-- `fetch`/XHR to other hosts is blocked, and the page cannot be framed.
+- No forms, no `fetch`/XHR, and the page cannot be framed.
+- Upload content type must be `text/html` or `text/plain`; anything else is
+  rejected. The CLI always sends the right one.
 - Size cap: 5 MiB by default (`max_upload_bytes` server config). Empty files
   are rejected.
 - Write a complete document — `<!doctype html>`, `<head>`, `<title>`,

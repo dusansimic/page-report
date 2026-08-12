@@ -246,7 +246,9 @@ type UploadPageRequest struct {
 	// Raw HTML bytes (base64 in JSON encoding).
 	Content []byte `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
 	Title   string `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
-	// Defaults to "text/html; charset=utf-8".
+	// Only "text/html" and "text/plain" are accepted; parameters are ignored
+	// and the value is stored canonicalised with charset=utf-8. Anything else is
+	// rejected with INVALID_ARGUMENT. Defaults to "text/html; charset=utf-8".
 	ContentType   string `protobuf:"bytes,3,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
