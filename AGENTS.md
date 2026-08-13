@@ -34,6 +34,11 @@ Package boundaries: `internal/client` is imported only by `cmd/page-report`;
 2. `buf lint && buf generate`.
 3. Commit `gen/` together with the proto change.
 
+Codegen plugins are pinned as `tool` directives in `go.mod` and invoked through
+`go tool` from `buf.gen.yaml`, so a fresh clone needs only Go and buf — no
+globally installed `protoc-gen-*`. CI regenerates and fails if `gen/` does not
+match the proto, which is what makes "never hand-edit `gen/`" enforceable.
+
 ## Migrations
 
 Add a numbered pair `migrations/00000N_name.{up,down}.sql` (golang-migrate
@@ -57,15 +62,45 @@ underscores (`oidc.client_id` → `PR_OIDC_CLIENT_ID`); every key is explicitly
   the credential store. Server URL precedence: `--server` > `PR_SERVER_URL` >
   config file.
 
+## Workflows
+
+Two entry points over three reusable workflows. The `_`-prefixed ones are
+`workflow_call`-only and are never triggered directly.
+
+| Workflow | Trigger | Does |
+|---|---|---|
+| `ci.yml` | push `main`, every PR, dispatch | verify, then build CLI + image. No side effects: nothing is pushed or released. |
+| `release.yml` | push tag `v*`, dispatch with a tag | verify, build, then publish a GitHub Release and push the image to GHCR. Only workflow with write scopes. |
+| `_verify.yml` | reusable | `lint` + `test` jobs — the checks that used to live in `.pre-commit-config.yaml`, plus golangci-lint, actionlint and a `gen/`-drift check. |
+| `_build-cli.yml` | reusable | 4× `GOOS`/`GOARCH` matrix, uploads artifacts. |
+| `_build-image.yml` | reusable | one native runner per arch, by-digest push, merge job builds the manifest list. |
+
+Two invariants:
+
+- **Builds always `needs: verify`.** A reusable-workflow call is a single node
+  in the caller's graph, so `needs: verify` means every check passed. Never let
+  a build job depend only on `meta`.
+- **The version string is computed once** in the caller's `meta` job and passed
+  down as an input; builders never derive it themselves. That is what keeps the
+  CLI and the image reporting the same version. Image tags likewise come from
+  that input, not from `github.ref`, so a `workflow_dispatch` re-release tags
+  correctly.
+
+There are deliberately no path filters: they are evaluated for tag pushes too,
+and a skipped job never reports a status, which breaks required checks.
+
+CI is the only gate — there are no local git hooks. `verify / lint` and
+`verify / test` are the checks to require in branch protection.
+
 ## Release assets
 
 Three places agree on one naming scheme and must be changed together:
-`.github/workflows/build-cli.yml` (Package step), `install.sh`, and
+`.github/workflows/release.yml` (Package step), `install.sh`, and
 `internal/client/selfupdate.go` (`AssetName`). Assets are
 `page-report_<tag>_<os>_<arch>.tar.gz` plus a `checksums.txt` of `sha256sum`
 lines; both the installer and `page-report update` refuse to install anything
-missing from `checksums.txt`. Adding a platform means adding a matrix entry —
-nothing else.
+missing from `checksums.txt`. Adding a platform means adding a matrix entry to
+`.github/workflows/_build-cli.yml` — nothing else.
 
 Self-update replaces the binary by writing `.page-report.new` next to it and
 renaming over the target, so the install dir must be writable and on one
@@ -127,10 +162,20 @@ Use the [Conventional Commits](https://www.conventionalcommits.org/) format
 
 ```sh
 go build ./...            # build everything
-go test ./...             # run tests
+go test -race ./...       # run tests as CI does
 buf lint && buf generate  # regenerate API code
-pre-commit run --all-files
 docker compose up --build # full stack behind Caddy
+```
+
+CI (`_verify.yml`) is the gate; these are the local fixes for what it reports:
+
+```sh
+gofmt -w .                              # gofmt check
+go mod tidy                             # "go.mod is tidy" check
+golangci-lint run ./...                 # staticcheck, errcheck, ineffassign, unused
+buf format -w && buf generate           # buf format + "gen/ matches proto" checks
+shellcheck $(git ls-files '*.sh')       # shellcheck
+actionlint                              # workflow lint (also shellchecks run: blocks)
 ```
 
 Local dev: set `dev: true` in config, use `app.localhost` / `pages.localhost`

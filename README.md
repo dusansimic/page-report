@@ -54,6 +54,30 @@ PR_OIDC_CLIENT_SECRET=...
 
 3. `docker compose up --build -d`. Caddy terminates TLS for both domains.
 
+## Container image
+
+Published to `ghcr.io/dusansimic/page-report` for `linux/amd64` and
+`linux/arm64` (one manifest list; Docker picks the right one).
+
+| Tag | Points at |
+|---|---|
+| `vX.Y.Z` | that exact release |
+| `X.Y` | newest stable patch of that minor |
+| `latest` | newest stable release — never untagged `main` |
+| `edge` | newest `main` commit, if `main` publishing is enabled |
+| `sha-<sha>` | one specific commit |
+
+A prerelease (`v0.2.0-rc.1`) is published under its exact version only — it
+never moves `X.Y` or `latest`.
+
+```sh
+docker run --rm ghcr.io/dusansimic/page-report:latest -version
+```
+
+`compose.yml` builds the image locally; point its `image:` at a published tag
+instead to deploy without a build. The server reports its version on startup
+and via `-version`; builds from source say `dev`.
+
 ## CLI
 
 ### Install
@@ -74,11 +98,11 @@ against the release `checksums.txt`, and installs the binary into
 Alternatives: grab a tarball from the [latest release][releases] by hand
 (`linux` and `darwin`, `amd64` and `arm64`), or build from source with
 `go build -o page-report ./cmd/page-report`. Untagged builds of `main` are
-uploaded as `page-report-<os>-<arch>` artifacts on every [Build CLI][build-cli]
-run. `page-report version` reports the build metadata.
+uploaded as `page-report-<os>-<arch>` artifacts on every [CI][ci] run.
+`page-report version` reports the build metadata.
 
 [releases]: https://github.com/dusansimic/page-report/releases
-[build-cli]: https://github.com/dusansimic/page-report/actions/workflows/build-cli.yml
+[ci]: https://github.com/dusansimic/page-report/actions/workflows/ci.yml
 
 ### Updating
 
@@ -193,10 +217,14 @@ untrusted, and three layers keep it inert:
 ## Development
 
 ```sh
-go build ./... && go test ./...
+go build ./... && go test -race ./...
 buf lint && buf generate        # after editing proto/
-pre-commit install              # once; hooks: gofmt, vet, mod-tidy, buf
 ```
+
+There are no git hooks: CI is the gate. Every check it runs has a local
+equivalent listed under "Commands" in `AGENTS.md` — `gofmt -w .`,
+`go mod tidy`, `golangci-lint run ./...`, `buf format -w`, `shellcheck`,
+`actionlint`.
 
 See `AGENTS.md` for conventions (package boundaries, migrations, config).
 
