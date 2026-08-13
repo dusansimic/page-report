@@ -1,0 +1,119 @@
+# The only workflow that writes outside the repo: CLI tarballs to a GitHub
+# Release, the server image to GHCR. The version is resolved and validated once
+# in `meta` and handed to both builders, so the two can never disagree.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: existing tag to (re-)release, e.g. v0.1.0
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Runs against the tagged commit even if it already passed CI on main: a tag
+  # can point at anything.
+  verify:
+    uses: ./.github/workflows/_verify.yml
+    permissions:
+      contents: read
+
+  meta:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - id: v
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -eu
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::'$TAG' is not a vMAJOR.MINOR.PATCH tag"; exit 1 ;;
+          esac
+          git rev-parse -q --verify "refs/tags/$TAG" >/dev/null \
+            || { echo "::error::tag $TAG does not exist"; exit 1; }
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          case "$TAG" in
+            *-*) echo "prerelease=true"  >> "$GITHUB_OUTPUT" ;;
+            *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+  cli:
+    needs: [verify, meta]
+    uses: ./.github/workflows/_build-cli.yml
+    permissions:
+      contents: read
+    with:
+      version: ${{ needs.meta.outputs.version }}
+      retention-days: 30
+
+  image:
+    needs: [verify, meta]
+    uses: ./.github/workflows/_build-image.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ needs.meta.outputs.version }}
+      push: true
+
+  github-release:
+    needs: [meta, cli]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.version }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: page-report-*
+          path: artifacts
+
+      # One tarball per platform, named the way install.sh and
+      # `page-report update` expect: page-report_<tag>_<os>_<arch>.tar.gz.
+      - name: Package
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          set -eu
+          for dir in artifacts/page-report-*; do
+            platform="${dir#artifacts/page-report-}"
+            os="${platform%-*}"
+            arch="${platform##*-}"
+            mkdir -p "pkg/$platform"
+            cp "$dir/page-report" README.md LICENSE "pkg/$platform/"
+            chmod +x "pkg/$platform/page-report"
+            tar -czf "page-report_${VERSION}_${os}_${arch}.tar.gz" \
+              -C "pkg/$platform" page-report README.md LICENSE
+          done
+          sha256sum page-report_*.tar.gz > checksums.txt
+          cat checksums.txt
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.meta.outputs.version }}
+          prerelease: ${{ needs.meta.outputs.prerelease }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            page-report_*.tar.gz
+            checksums.txt
