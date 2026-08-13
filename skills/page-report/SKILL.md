@@ -27,33 +27,48 @@ Primary job: **write the report as HTML → `page-report upload` → show the UR
   environment, or `server_url: <app-domain-url>` in
   `$XDG_CONFIG_HOME/page-report/config.yml` (default
   `~/.config/page-report/config.yml`). The value is the **app** domain; the
-  printed page links live on a separate **pages** domain.
-- **Logged in** — see below. Credentials are stored in
-  `~/.config/page-report/credentials.json` (mode 0600) and persist across
+  the dashboard, the API and the page links all live on that one origin.
+- **Logged in** — see below. The token is stored in
+  `~/.config/page-report/credentials.json` (mode 0600) and persists across
   sessions.
 
 ## One-time login
 
-Authentication uses an RFC 8628 OAuth device flow:
+The CLI authenticates with an API token the user creates in the server's web
+dashboard. There is no device flow and nothing to poll.
 
 ```sh
 page-report login
 ```
 
-It prints a verification URL and a code, then blocks:
+It prints where to get a token, then waits for it to be pasted (input hidden):
 
 ```
-Open https://github.com/login/device and enter code: ABCD-1234
-Waiting for authorization...
+Create a token at https://reports.example.org/tokens
+Paste it here (input is hidden):
 ```
 
-**Relay the URL and code to the user verbatim and wait** — the user must
-approve in their browser; the command polls until they do. Prefer having the
-user run `page-report login` themselves rather than running it from an
-unattended agent loop, since it cannot complete without them.
+**Give the user that URL and wait for them.** They sign in, click *New token*,
+and copy it — a token is shown only once. Prefer having the user run
+`page-report login` themselves; it cannot complete without them.
 
-Repeat login only when a command fails with an authentication error.
-`page-report logout` deletes the stored credentials.
+If the user hands you a token directly, store it without a prompt:
+
+```sh
+echo "$TOKEN" | page-report login --token-stdin
+```
+
+Or skip storing entirely — `PR_TOKEN` overrides the credentials file and is the
+right choice for one-off and CI use:
+
+```sh
+PR_TOKEN=prt_... page-report upload report.html
+```
+
+`page-report whoami` shows which identity and token are in use. Repeat login
+only when a command fails with an authentication error (a revoked, deleted or
+expired token looks the same as no token). `page-report logout` deletes the
+stored token.
 
 ## Publishing a report
 
@@ -63,8 +78,8 @@ page-report upload report.html --title "Weekly metrics"
 ```
 
 On success stdout is a single line: the shareable URL. **Always show this URL
-to the user** — it is the deliverable. Never hand-build a page URL from the
-configured server URL; that is the app domain, not the pages domain.
+to the user** — it is the deliverable. Take it from the command output rather
+than hand-building it.
 
 - `--title` defaults to the filename without extension, which is usually ugly.
   Always pass a real human title; it is what `list` and the page header show.
@@ -108,10 +123,11 @@ The file must therefore be **fully self-contained and free of JavaScript**:
 
 | Command | What it does |
 |---|---|
-| `page-report login` | Device-flow OAuth; stores credentials. Blocks on user approval. |
-| `page-report logout` | Deletes stored credentials. |
+| `page-report login [--token-stdin]` | Stores an API token from the web dashboard. Prompts unless `--token-stdin`. |
+| `page-report logout` | Deletes the stored token. |
+| `page-report whoami [--json]` | Which identity and token the stored credentials belong to. |
 | `page-report upload <file.html> [--title T] [--json]` | Publishes a page; prints its URL. |
-| `page-report list [--json]` | Every page on the server, newest first. |
+| `page-report list [--json]` | Your own pages, newest first. |
 | `page-report get <id> [-o F] [--meta] [--json]` | Downloads a page's HTML; stdout unless `-o`. |
 | `page-report delete <id>` | Removes one page. No confirmation prompt. |
 | `page-report prune --older-than <dur>` | Removes all pages older than `dur`. No confirmation prompt. |
@@ -142,15 +158,17 @@ the binary, and needs the install directory writable and on one filesystem.
 ### Destructive commands
 
 `delete` and `prune` take effect immediately, have **no confirmation prompt**,
-and are **not scoped to you** — every allowlisted user sees and can delete
-every page, so `prune` can wipe other people's work. **Ask the user first**,
-naming the ids and titles you are about to remove. When replacing an earlier
-revision, upload the new page first, then ask whether to delete the old one.
+and are scoped to the token's owner: you cannot see or remove another user's
+pages, but `prune` can still wipe every report *this* user published. **Ask the
+user first**, naming the ids and titles you are about to remove. When replacing
+an earlier revision, upload the new page first, then ask whether to delete the
+old one.
 
 ## Patterns
 
 - **Initial setup** — `page-report version` to confirm the binary, set
-  `server_url` in the config file once, then `page-report login`.
+  `server_url` in the config file once, then `page-report login` (which needs a
+  token from the dashboard) and `page-report whoami` to confirm.
 - **Publish and share** — write HTML to a scratch file (not into the user's
   repo), `upload --title`, show the URL as the last line of your reply.
 - **Batch** — loop `upload` over a directory; see `examples/batch-upload.sh`.
@@ -166,22 +184,24 @@ Runnable versions of these live in `examples/`.
 
 | Setting | Flag | Env var | Config key |
 |---|---|---|---|
-| Server base URL (app domain) | `--server` | `PR_SERVER_URL` | `server_url` |
+| Server base URL | `--server` | `PR_SERVER_URL` | `server_url` |
+| API token | — | `PR_TOKEN` | — (stored in `credentials.json`) |
 | Config file path | `--config` | — | — |
 
 Precedence: `--server` > `PR_SERVER_URL` > config file. The config file is
 `$XDG_CONFIG_HOME/page-report/config.yml` (falling back to
 `~/.config/page-report/config.yml`); a missing file is fine, a `--config` path
 that does not exist is an error. In containers and CI, set `PR_SERVER_URL` and
-mount a pre-authenticated `credentials.json` — there is no non-interactive
-login.
+`PR_TOKEN`; no credentials file or interactive step is needed.
 
 ## Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|
-| `error: unauthenticated` + `hint: run page-report login first` | No credentials or expired token → user runs `page-report login`. |
-| `token expired and no refresh token stored` | Same; re-login required. |
+| `error: unauthenticated: invalid token` + `hint: run page-report login first` | No token, or it was revoked, deleted or expired → user creates a new one in the dashboard and re-runs `page-report login`. Rotating a token invalidates the old secret immediately. |
+| `credentials are from an older version that used device-flow login` | The stored file predates server-minted tokens → `page-report login` with a token from the dashboard. |
+| `stdin is not a terminal: pass --token-stdin` | `login` was run non-interactively → pipe the token in with `--token-stdin`, or set `PR_TOKEN`. |
+| `error: not_found` on `delete`/`get` | The id does not exist, or it belongs to another user — the two are indistinguishable on purpose. |
 | `server URL required: pass --server, ...` | No `--server`, `PR_SERVER_URL`, or `server_url` in config. |
 | `invalid server URL ...: must be an absolute http(s) URL` | Missing scheme or host in the configured URL. |
 | `content exceeds max upload size of N bytes` | Over 5 MiB — drop embedded images or split the page. |

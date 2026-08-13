@@ -1,25 +1,21 @@
-# Two domains, one backend. pr-server routes by Host header:
-# the app domain serves the homepage + ConnectRPC API, the pages
-# domain serves login-gated report pages at /p/{id}.
-# Caddy provisions TLS automatically; it also sets X-Forwarded-*
+# One domain, one backend. pr-server serves the dashboard, the ConnectRPC
+# APIs, OAuth login and the sandboxed report pages at /p/{id} from a single
+# origin. Caddy provisions TLS automatically; it also sets X-Forwarded-*
 # headers on reverse_proxy by default — no extra header config needed.
 
-{$APP_DOMAIN} {
+{$BASE_DOMAIN} {
 	reverse_proxy app:8080
 }
 
-{$PAGES_DOMAIN} {
-	reverse_proxy app:8080
-}
+# --- Upgrading from the two-domain layout ------------------------------
+# Report URLs are built from base_url at read time, so links previously
+# shared as https://<pages domain>/p/{id} stop resolving. Keep the old
+# hostname pointed here and redirect it:
+#
+# {$OLD_PAGES_DOMAIN} {
+# 	redir https://{$BASE_DOMAIN}{uri} permanent
+# }
 
-# --- Local dev variant ---------------------------------------------
-# Replace the blocks above with these (Caddy issues self-signed certs
-# for *.localhost automatically; trust the local CA or click through):
-#
-# app.localhost {
-# 	reverse_proxy app:8080
-# }
-#
-# pages.localhost {
-# 	reverse_proxy app:8080
-# }
+# --- Local dev variant -------------------------------------------------
+# For local runs, skip Caddy entirely: set dev: true and point base_url at
+# the Vite dev server (see the "Local development" section of the README).

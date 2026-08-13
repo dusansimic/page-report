@@ -5,12 +5,19 @@ package pagereport.v1;
 option go_package = "github.com/dusan/page-report/gen/pagereport/v1;pagereportv1";
 
 // PageService is the CLI-facing API for uploading and managing report pages.
-// All RPCs except GetAuthConfig require a bearer token from the configured
-// identity provider.
+// All RPCs except GetServerInfo require a bearer token minted by this server
+// (see DashboardService.CreateToken).
+//
+// This service is deliberately unreachable from a browser: the server refuses
+// any request carrying a script-initiated Sec-Fetch-Dest. The web dashboard
+// uses DashboardService instead.
 service PageService {
-  // GetAuthConfig returns the identity-provider settings the CLI needs to run
-  // the OAuth device flow. Unauthenticated.
-  rpc GetAuthConfig(GetAuthConfigRequest) returns (GetAuthConfigResponse) {}
+  // GetServerInfo returns public server metadata. Unauthenticated; the CLI
+  // calls it during `login` to tell the user where to mint a token.
+  rpc GetServerInfo(GetServerInfoRequest) returns (GetServerInfoResponse) {}
+  // WhoAmI reports the identity behind the presented token. The CLI calls it
+  // to verify a pasted token before storing it.
+  rpc WhoAmI(WhoAmIRequest) returns (WhoAmIResponse) {}
   rpc UploadPage(UploadPageRequest) returns (UploadPageResponse) {}
   rpc ListPages(ListPagesRequest) returns (ListPagesResponse) {}
   rpc GetPage(GetPageRequest) returns (GetPageResponse) {}
@@ -18,21 +25,25 @@ service PageService {
   rpc PrunePages(PrunePagesRequest) returns (PrunePagesResponse) {}
 }
 
-message GetAuthConfigRequest {}
+message GetServerInfoRequest {}
 
-message GetAuthConfigResponse {
-  // "github" or "oidc".
-  string provider = 1;
-  // OIDC issuer URL (empty for github).
-  string issuer = 2;
-  // OAuth client id the CLI uses for the device flow.
-  string client_id = 3;
-  // Scopes to request in the device flow.
-  repeated string scopes = 4;
-  // Device authorization endpoint.
-  string device_endpoint = 5;
-  // Token endpoint for polling / refresh.
-  string token_endpoint = 6;
+message GetServerInfoResponse {
+  // Public base URL of the server: SPA, API and report pages all live here.
+  string base_url = 1;
+  // Dashboard page where a user mints CLI tokens.
+  string tokens_url = 2;
+  string server_version = 3;
+}
+
+message WhoAmIRequest {}
+
+message WhoAmIResponse {
+  string subject = 1;
+  string email = 2;
+  string login = 3;
+  // Id and label of the token used for this call.
+  string token_id = 4;
+  string token_name = 5;
 }
 
 message PageMeta {
@@ -43,7 +54,7 @@ message PageMeta {
   // Unix seconds UTC.
   int64 created_at = 5;
   string created_by = 6;
-  // Full URL where the page is served (pages domain).
+  // Full URL where the page is served.
   string url = 7;
 }
 

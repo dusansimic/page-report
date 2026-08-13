@@ -14,11 +14,17 @@ import (
 )
 
 // TokenSource supplies the bearer token attached to authenticated RPCs.
-// Implementations may refresh the token as needed. Returning an empty
-// token (with a nil error) means "send no Authorization header".
+// Returning an empty token (with a nil error) means "send no Authorization
+// header".
 type TokenSource interface {
 	Token(ctx context.Context) (string, error)
 }
+
+// StaticToken is a TokenSource for a token held in memory — used by `login`,
+// which must verify a token before it is worth storing.
+type StaticToken string
+
+func (s StaticToken) Token(context.Context) (string, error) { return string(s), nil }
 
 // New returns a PageService client for the given server base URL. It speaks
 // the Connect protocol with JSON on the wire. If ts is non-nil, every request

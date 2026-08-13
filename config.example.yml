@@ -6,13 +6,15 @@
 # Address the HTTP server binds to. Env: PR_LISTEN_ADDR. Default ":8080".
 listen_addr: ":8080"
 
-# Public base URL of the app domain (homepage + API). Env: PR_APP_BASE_URL.
-# Must be https unless dev: true. Must differ from pages_base_url host.
-app_base_url: "https://report.example.com"
-
-# Public base URL of the pages domain (login-gated /p/{id} pages).
-# Env: PR_PAGES_BASE_URL.
-pages_base_url: "https://pages.example.com"
+# Public base URL. The dashboard, the API, OAuth login and the report pages at
+# /p/{id} are all served from this single origin. Env: PR_BASE_URL.
+# Must be https unless dev: true.
+#
+# Upgrading from the two-domain layout: app_base_url is still accepted for one
+# release and pages_base_url is ignored. Rename to base_url. Report URLs are
+# built from this value, so links shared under the old pages domain need a
+# redirect there — see the Caddyfile.
+base_url: "https://reports.example.com"
 
 # Path to the SQLite database file. Env: PR_DB_PATH. Default "page-report.db".
 db_path: "/data/page-report.db"
@@ -28,17 +30,29 @@ session_ttl: "24h"
 # Default 5242880 (5 MiB).
 max_upload_bytes: 5242880
 
-# Identity provider: "github" or "oidc". Env: PR_PROVIDER.
+# Expiry preselected in the dashboard for new CLI tokens (Go duration).
+# Env: PR_TOKEN_DEFAULT_TTL. Default "0" — never expires.
+token_default_ttl: "0"
+
+# How recently a session must have authenticated before it may create or
+# rotate a CLI token. A token outlives the session that mints it and works from
+# any machine, so a long-idle session is sent back through the identity
+# provider first. Env: PR_TOKEN_MINT_REAUTH_WINDOW. Default "10m"; "0" disables.
+token_mint_reauth_window: "10m"
+
+# Identity provider for human web login: "github" or "oidc". Env: PR_PROVIDER.
+# CLI credentials are tokens minted by this server, not provider tokens, so the
+# provider is only involved when a person signs in to the dashboard.
 provider: "github"
 
-# Identities allowed to log in and upload (GitHub logins or OIDC subjects).
+# Identities allowed to log in and upload (GitHub logins or OIDC emails).
 # Env: PR_ALLOWLIST as a comma-separated string ("alice,bob").
 allowlist:
   - "alice"
   - "bob"
 
 # GitHub OAuth app credentials (used when provider: github).
-# Device flow must be enabled on the OAuth app.
+# The app's Authorization callback URL must be <base_url>/auth/callback.
 github:
   client_id: ""     # Env: PR_GITHUB_CLIENT_ID
   client_secret: "" # Env: PR_GITHUB_CLIENT_SECRET
@@ -48,10 +62,7 @@ oidc:
   issuer: ""        # Env: PR_OIDC_ISSUER, e.g. "https://id.example.com"
   client_id: ""     # Env: PR_OIDC_CLIENT_ID
   client_secret: "" # Env: PR_OIDC_CLIENT_SECRET
-  # Expected aud claim on CLI bearer tokens. Env: PR_OIDC_AUDIENCE.
-  # Defaults to oidc.client_id when empty.
-  audience: ""
 
-# Dev mode: allows http:// base URLs for local runs (*.localhost).
+# Dev mode: allows an http:// base URL for local runs.
 # Env: PR_DEV. Default false.
 dev: false

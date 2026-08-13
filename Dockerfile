@@ -1,8 +1,20 @@
+# The SPA is embedded into the server binary, so it has to be built first.
+FROM node:24-alpine AS web
+RUN corepack enable
+WORKDIR /src/web/app
+COPY web/app/package.json web/app/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY web/app/ ./
+RUN pnpm build
+
 FROM golang:1.26 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+# Overwrites the .gitkeep-only placeholder that keeps `go build` working
+# without a Node toolchain.
+COPY --from=web /src/web/app/dist ./web/app/dist
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pr-server ./cmd/pr-server
 
 FROM gcr.io/distroless/static-debian12:nonroot
