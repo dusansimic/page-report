@@ -3,7 +3,16 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pr-server ./cmd/pr-server
+
+# Declared after `go mod download` so a version change does not invalidate the
+# dependency layer. Defaults keep `docker compose up --build` working with no
+# build args.
+ARG VERSION=dev
+ARG COMMIT=""
+ARG DATE=""
+RUN CGO_ENABLED=0 go build -trimpath \
+      -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
+      -o /out/pr-server ./cmd/pr-server
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/pr-server /pr-server

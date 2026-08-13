@@ -21,6 +21,15 @@ import (
 	"github.com/dusan/page-report/internal/store"
 )
 
+// Build metadata, injected via -ldflags "-X main.version=..." by the release
+// workflow (and by the Dockerfile's VERSION/COMMIT/DATE build args). Without
+// ldflags these keep their dev defaults.
+var (
+	version = "dev"
+	commit  = ""
+	date    = ""
+)
+
 // authConfigAdapter bridges auth.DeviceAuthConfig to server.AuthConfigProvider.
 type authConfigAdapter struct {
 	dac auth.DeviceAuthConfig
@@ -45,7 +54,15 @@ func main() {
 
 func run() error {
 	configPath := flag.String("config", "", "path to YAML config file (default: ./config.yml if present)")
+	showVersion := flag.Bool("version", false, "print build metadata and exit")
 	flag.Parse()
+
+	// Answered before touching config or the database so that `-version` works
+	// on a container that is otherwise unconfigured.
+	if *showVersion {
+		fmt.Printf("pr-server %s (%s, %s)\n", version, commit, date)
+		return nil
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -94,8 +111,8 @@ func run() error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("listening on %s (app: %s, pages: %s)",
-			cfg.ListenAddr, cfg.AppBaseURL, cfg.PagesBaseURL)
+		log.Printf("pr-server %s listening on %s (app: %s, pages: %s)",
+			version, cfg.ListenAddr, cfg.AppBaseURL, cfg.PagesBaseURL)
 		errCh <- httpServer.ListenAndServe()
 	}()
 
