@@ -6,3 +6,8 @@ plugins:
   - local: protoc-gen-connect-go
     out: gen
     opt: paths=source_relative
+  # TypeScript for the embedded SPA. connect-es v2 builds its clients from the
+  # protobuf-es output alone, so no separate connect plugin is needed.
+  - remote: buf.build/bufbuild/es:v2.13.0
+    out: web/app/src/gen
+    opt: target=ts

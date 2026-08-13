@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -18,6 +19,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	pagereportv1 "github.com/dusan/page-report/gen/pagereport/v1"
 	"github.com/dusan/page-report/gen/pagereport/v1/pagereportv1connect"
@@ -48,7 +50,7 @@ func main() {
 	}
 	root.SetVersionTemplate("page-report {{.Version}}\n")
 	root.PersistentFlags().StringVar(&serverURL, "server", "",
-		"page-report server base URL (app domain); falls back to PR_SERVER_URL, then the config file")
+		"page-report server base URL; falls back to PR_SERVER_URL, then the config file")
 	root.PersistentFlags().StringVar(&configPath, "config", "",
 		"path to config file (default: $XDG_CONFIG_HOME/page-report/config.yml)")
 	root.PersistentPreRunE = func(*cobra.Command, []string) error {
@@ -57,8 +59,8 @@ func main() {
 		return err
 	}
 
-	root.AddCommand(loginCmd(), logoutCmd(), uploadCmd(), listCmd(), getCmd(), deleteCmd(),
-		pruneCmd(), updateCmd(), versionCmd())
+	root.AddCommand(loginCmd(), logoutCmd(), whoamiCmd(), uploadCmd(), listCmd(), getCmd(),
+		deleteCmd(), pruneCmd(), updateCmd(), versionCmd())
 
 	if err := root.Execute(); err != nil {
 		msg := err.Error()
@@ -97,10 +99,14 @@ func authedClient() (pagereportv1connect.PageServiceClient, error) {
 }
 
 func loginCmd() *cobra.Command {
-	return &cobra.Command{
+	var fromStdin bool
+	cmd := &cobra.Command{
 		Use:   "login",
-		Short: "Authenticate against the server's identity provider (device flow)",
-		Args:  cobra.NoArgs,
+		Short: "Store an API token created in the server's web dashboard",
+		Long: "Store an API token for this server.\n\n" +
+			"Tokens are created in the web dashboard, on the Tokens page. The token is\n" +
+			"shown there once: paste it here and it is saved to the credentials file.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			url, err := server()
 			if err != nil {
@@ -108,30 +114,125 @@ func loginCmd() *cobra.Command {
 			}
 			ctx := cmd.Context()
 
-			resp, err := client.New(url, nil).GetAuthConfig(ctx,
-				connect.NewRequest(&pagereportv1.GetAuthConfigRequest{}))
-			if err != nil {
-				return fmt.Errorf("fetch auth config from %s: %w", url, err)
-			}
-			ac := client.AuthConfigFromProto(resp.Msg)
-
-			tok, err := client.DeviceLogin(ctx, ac, func(uri, code, complete string) {
-				fmt.Printf("Open %s and enter code: %s\n", uri, code)
-				if complete != "" {
-					fmt.Printf("Or open directly: %s\n", complete)
+			// Best effort: the server tells us where tokens are minted. A
+			// server too old (or briefly down) to answer must not block a
+			// login the user can complete from the URL they already know.
+			tokensURL := strings.TrimRight(url, "/") + "/tokens"
+			if resp, err := client.New(url, nil).GetServerInfo(ctx,
+				connect.NewRequest(&pagereportv1.GetServerInfoRequest{})); err == nil {
+				if u := resp.Msg.GetTokensUrl(); u != "" {
+					tokensURL = u
 				}
-				fmt.Println("Waiting for authorization...")
-			})
+			}
+
+			token, err := readToken(cmd, fromStdin, tokensURL)
 			if err != nil {
 				return err
 			}
-			if err := client.Save(client.CredentialsFromToken(url, ac, tok)); err != nil {
+
+			// Verify before storing, so a mistyped or already-revoked token
+			// fails here rather than on the user's next upload.
+			who, err := client.New(url, client.StaticToken(token)).WhoAmI(ctx,
+				connect.NewRequest(&pagereportv1.WhoAmIRequest{}))
+			if err != nil {
+				return fmt.Errorf("verify token against %s: %w", url, err)
+			}
+
+			if err := client.Save(client.Credentials{ServerURL: url, Token: token}); err != nil {
 				return err
 			}
-			fmt.Println("Logged in.")
+			fmt.Printf("Logged in to %s as %s.\n", url, describe(who.Msg))
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&fromStdin, "token-stdin", false,
+		"read the token from stdin instead of prompting")
+	return cmd
+}
+
+// readToken collects the token without echoing it to the terminal. Piped input
+// is read verbatim so `echo "$TOK" | page-report login --token-stdin` works in
+// scripts.
+func readToken(cmd *cobra.Command, fromStdin bool, tokensURL string) (string, error) {
+	if fromStdin {
+		data, err := io.ReadAll(cmd.InOrStdin())
+		if err != nil {
+			return "", fmt.Errorf("read token from stdin: %w", err)
+		}
+		token := strings.TrimSpace(string(data))
+		if token == "" {
+			return "", errors.New("no token on stdin")
+		}
+		return token, nil
+	}
+
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		return "", errors.New("stdin is not a terminal: pass --token-stdin to pipe the token in")
+	}
+	fmt.Fprintf(os.Stderr, "Create a token at %s\nPaste it here (input is hidden): ", tokensURL)
+	data, err := term.ReadPassword(fd)
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", fmt.Errorf("read token: %w", err)
+	}
+	token := strings.TrimSpace(string(data))
+	if token == "" {
+		return "", errors.New("no token entered")
+	}
+	return token, nil
+}
+
+func describe(who *pagereportv1.WhoAmIResponse) string {
+	name := who.GetEmail()
+	if name == "" {
+		name = who.GetLogin()
+	}
+	if name == "" {
+		name = who.GetSubject()
+	}
+	if tn := who.GetTokenName(); tn != "" {
+		return fmt.Sprintf("%s (token %q)", name, tn)
+	}
+	return name
+}
+
+func whoamiCmd() *cobra.Command {
+	var asJSON bool
+	cmd := &cobra.Command{
+		Use:   "whoami",
+		Short: "Show which identity and token the stored credentials belong to",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			c, err := authedClient()
+			if err != nil {
+				return err
+			}
+			resp, err := c.WhoAmI(cmd.Context(), connect.NewRequest(&pagereportv1.WhoAmIRequest{}))
+			if err != nil {
+				return err
+			}
+			m := resp.Msg
+			if asJSON {
+				return printJSON(map[string]string{
+					"subject":    m.GetSubject(),
+					"email":      m.GetEmail(),
+					"login":      m.GetLogin(),
+					"token_id":   m.GetTokenId(),
+					"token_name": m.GetTokenName(),
+				})
+			}
+			tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+			fmt.Fprintf(tw, "SUBJECT\t%s\n", m.GetSubject())
+			fmt.Fprintf(tw, "EMAIL\t%s\n", m.GetEmail())
+			fmt.Fprintf(tw, "LOGIN\t%s\n", m.GetLogin())
+			fmt.Fprintf(tw, "TOKEN_ID\t%s\n", m.GetTokenId())
+			fmt.Fprintf(tw, "TOKEN_NAME\t%s\n", m.GetTokenName())
+			return tw.Flush()
+		},
+	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "output JSON")
+	return cmd
 }
 
 func logoutCmd() *cobra.Command {

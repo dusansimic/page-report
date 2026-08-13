@@ -5,6 +5,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"strings"
 	"time"
@@ -28,14 +29,17 @@ type OIDCConfig struct {
 	Issuer       string `mapstructure:"issuer"`
 	ClientID     string `mapstructure:"client_id"`
 	ClientSecret string `mapstructure:"client_secret"`
-	// Audience is the expected aud claim on CLI tokens. Defaults to ClientID.
-	Audience string `mapstructure:"audience"`
 }
 
 type Config struct {
-	ListenAddr     string        `mapstructure:"listen_addr"`
-	AppBaseURL     string        `mapstructure:"app_base_url"`
-	PagesBaseURL   string        `mapstructure:"pages_base_url"`
+	ListenAddr string `mapstructure:"listen_addr"`
+	// BaseURL is the single public origin: SPA, API, auth and report pages are
+	// all served from it.
+	BaseURL string `mapstructure:"base_url"`
+	// AppBaseURL is the pre-single-origin name for BaseURL, accepted for one
+	// release so an existing deployment still boots after upgrading. See Load.
+	AppBaseURL string `mapstructure:"app_base_url"`
+
 	DBPath         string        `mapstructure:"db_path"`
 	SessionSecret  string        `mapstructure:"session_secret"`
 	SessionTTL     time.Duration `mapstructure:"session_ttl"`
@@ -44,7 +48,17 @@ type Config struct {
 	Allowlist      []string      `mapstructure:"allowlist"`
 	GitHub         GitHubConfig  `mapstructure:"github"`
 	OIDC           OIDCConfig    `mapstructure:"oidc"`
-	// Dev disables the https requirement on base URLs for local runs.
+
+	// TokenDefaultTTL is the expiry preselected in the dashboard for new CLI
+	// tokens. Zero means the default offered is "never expires".
+	TokenDefaultTTL time.Duration `mapstructure:"token_default_ttl"`
+	// TokenMintReauthWindow is how recently a session must have authenticated
+	// before it may mint or rotate a CLI token. A token outlives the session
+	// that created it and works from anywhere, so a stale session should not
+	// be able to silently produce one. Zero disables the check.
+	TokenMintReauthWindow time.Duration `mapstructure:"token_mint_reauth_window"`
+
+	// Dev disables the https requirement on the base URL for local runs.
 	Dev bool `mapstructure:"dev"`
 }
 
@@ -53,21 +67,22 @@ type Config struct {
 // Unmarshal.
 var keys = []string{
 	"listen_addr",
+	"base_url",
 	"app_base_url",
-	"pages_base_url",
 	"db_path",
 	"session_secret",
 	"session_ttl",
 	"max_upload_bytes",
 	"provider",
 	"allowlist",
+	"token_default_ttl",
+	"token_mint_reauth_window",
 	"dev",
 	"github.client_id",
 	"github.client_secret",
 	"oidc.issuer",
 	"oidc.client_id",
 	"oidc.client_secret",
-	"oidc.audience",
 }
 
 // Load reads configuration from the given YAML file (optional; empty path or a
@@ -79,6 +94,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("db_path", "page-report.db")
 	v.SetDefault("session_ttl", "24h")
 	v.SetDefault("max_upload_bytes", 5*1024*1024)
+	v.SetDefault("token_mint_reauth_window", "10m")
 
 	v.SetEnvPrefix("PR")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
@@ -110,6 +126,17 @@ func Load(path string) (*Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
+
+	// Deprecation shim: the two-domain split collapsed into one origin, so
+	// app_base_url became base_url and pages_base_url disappeared. Keep an
+	// existing config booting rather than failing on an unset key.
+	if cfg.BaseURL == "" && cfg.AppBaseURL != "" {
+		log.Printf("config: app_base_url is deprecated, rename it to base_url " +
+			"(pages_base_url is no longer used: reports are served from the same origin)")
+		cfg.BaseURL = cfg.AppBaseURL
+	}
+	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
+
 	// An env-provided allowlist arrives as one comma-separated string, which
 	// viper may additionally split on spaces; renormalize either shape.
 	var allowlist []string
@@ -119,9 +146,6 @@ func Load(path string) (*Config, error) {
 		}
 	}
 	cfg.Allowlist = allowlist
-	if cfg.Provider == ProviderOIDC && cfg.OIDC.Audience == "" {
-		cfg.OIDC.Audience = cfg.OIDC.ClientID
-	}
 
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -133,11 +157,7 @@ func (c *Config) Validate() error {
 	var errs []string
 	add := func(format string, args ...any) { errs = append(errs, fmt.Sprintf(format, args...)) }
 
-	appHost := checkBaseURL(&errs, "app_base_url", c.AppBaseURL, c.Dev)
-	pagesHost := checkBaseURL(&errs, "pages_base_url", c.PagesBaseURL, c.Dev)
-	if appHost != "" && appHost == pagesHost {
-		add("app_base_url and pages_base_url must be different hosts (got %s)", appHost)
-	}
+	checkBaseURL(&errs, "base_url", c.BaseURL, c.Dev)
 
 	if len(c.SessionSecret) < 32 {
 		add("session_secret must be at least 32 bytes")
@@ -147,6 +167,12 @@ func (c *Config) Validate() error {
 	}
 	if c.MaxUploadBytes <= 0 {
 		add("max_upload_bytes must be positive")
+	}
+	if c.TokenDefaultTTL < 0 {
+		add("token_default_ttl must not be negative")
+	}
+	if c.TokenMintReauthWindow < 0 {
+		add("token_mint_reauth_window must not be negative")
 	}
 
 	switch c.Provider {
@@ -168,23 +194,35 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// PageURL builds the public URL for a page id on the pages domain.
+// PageURL builds the public URL for a page id. URLs are built only from
+// base_url, never from a request's Host header.
 func (c *Config) PageURL(id string) string {
-	return strings.TrimRight(c.PagesBaseURL, "/") + "/p/" + id
+	return c.BaseURL + "/p/" + id
 }
 
-func checkBaseURL(errs *[]string, name, raw string, dev bool) (host string) {
+// TokensURL is the dashboard page where a user mints CLI tokens. The CLI
+// prints it during `page-report login`.
+func (c *Config) TokensURL() string {
+	return c.BaseURL + "/tokens"
+}
+
+// CallbackURL is the OAuth redirect target registered with the identity
+// provider.
+func (c *Config) CallbackURL() string {
+	return c.BaseURL + "/auth/callback"
+}
+
+func checkBaseURL(errs *[]string, name, raw string, dev bool) {
 	if raw == "" {
 		*errs = append(*errs, name+" is required")
-		return ""
+		return
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {
 		*errs = append(*errs, name+" must be a valid absolute URL")
-		return ""
+		return
 	}
 	if !dev && u.Scheme != "https" {
 		*errs = append(*errs, name+" must use https (set dev: true for local runs)")
 	}
-	return u.Host
 }

@@ -17,7 +17,7 @@ import (
 // gothic at the app's session store and pins the provider name so goth does
 // not require a ?provider= URL parameter.
 func SetupGoth(cfg *config.Config, m *SessionManager) error {
-	callbackURL := strings.TrimRight(cfg.PagesBaseURL, "/") + "/auth/callback"
+	callbackURL := cfg.CallbackURL()
 
 	var p goth.Provider
 	switch cfg.Provider {

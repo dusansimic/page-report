@@ -6,3 +6,9 @@ config.yml
 /pr-server
 *.local.yml
 .claude/
+
+# Frontend. dist is a build artifact, but the directory must exist for the
+# go:embed in web/app.go to resolve on a clean checkout.
+web/app/node_modules/
+web/app/dist/*
+!web/app/dist/.gitkeep

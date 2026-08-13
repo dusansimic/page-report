@@ -2,10 +2,11 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
+      # Both generated trees are buf output: leave them exactly as emitted.
       - id: trailing-whitespace
-        exclude: ^gen/
+        exclude: ^(gen/|web/app/src/gen/)
       - id: end-of-file-fixer
-        exclude: ^gen/
+        exclude: ^(gen/|web/app/src/gen/)
       - id: check-yaml
       - id: check-added-large-files
 
@@ -34,6 +35,20 @@ repos:
         entry: go build ./...
         language: system
         types: [go]
+        pass_filenames: false
+      - id: web-typecheck
+        name: tsc --noEmit
+        entry: pnpm --dir web/app typecheck
+        language: system
+        files: ^web/app/.*\.(ts|tsx|json)$
+        exclude: ^web/app/src/gen/
+        pass_filenames: false
+      - id: web-lint
+        name: oxlint
+        entry: pnpm --dir web/app lint
+        language: system
+        files: ^web/app/.*\.(ts|tsx)$
+        exclude: ^web/app/src/gen/
         pass_filenames: false
 
   - repo: https://github.com/shellcheck-py/shellcheck-py

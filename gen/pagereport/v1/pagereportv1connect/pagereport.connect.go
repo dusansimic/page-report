@@ -33,9 +33,11 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
-	// PageServiceGetAuthConfigProcedure is the fully-qualified name of the PageService's GetAuthConfig
+	// PageServiceGetServerInfoProcedure is the fully-qualified name of the PageService's GetServerInfo
 	// RPC.
-	PageServiceGetAuthConfigProcedure = "/pagereport.v1.PageService/GetAuthConfig"
+	PageServiceGetServerInfoProcedure = "/pagereport.v1.PageService/GetServerInfo"
+	// PageServiceWhoAmIProcedure is the fully-qualified name of the PageService's WhoAmI RPC.
+	PageServiceWhoAmIProcedure = "/pagereport.v1.PageService/WhoAmI"
 	// PageServiceUploadPageProcedure is the fully-qualified name of the PageService's UploadPage RPC.
 	PageServiceUploadPageProcedure = "/pagereport.v1.PageService/UploadPage"
 	// PageServiceListPagesProcedure is the fully-qualified name of the PageService's ListPages RPC.
@@ -50,9 +52,12 @@ const (
 
 // PageServiceClient is a client for the pagereport.v1.PageService service.
 type PageServiceClient interface {
-	// GetAuthConfig returns the identity-provider settings the CLI needs to run
-	// the OAuth device flow. Unauthenticated.
-	GetAuthConfig(context.Context, *connect.Request[v1.GetAuthConfigRequest]) (*connect.Response[v1.GetAuthConfigResponse], error)
+	// GetServerInfo returns public server metadata. Unauthenticated; the CLI
+	// calls it during `login` to tell the user where to mint a token.
+	GetServerInfo(context.Context, *connect.Request[v1.GetServerInfoRequest]) (*connect.Response[v1.GetServerInfoResponse], error)
+	// WhoAmI reports the identity behind the presented token. The CLI calls it
+	// to verify a pasted token before storing it.
+	WhoAmI(context.Context, *connect.Request[v1.WhoAmIRequest]) (*connect.Response[v1.WhoAmIResponse], error)
 	UploadPage(context.Context, *connect.Request[v1.UploadPageRequest]) (*connect.Response[v1.UploadPageResponse], error)
 	ListPages(context.Context, *connect.Request[v1.ListPagesRequest]) (*connect.Response[v1.ListPagesResponse], error)
 	GetPage(context.Context, *connect.Request[v1.GetPageRequest]) (*connect.Response[v1.GetPageResponse], error)
@@ -71,10 +76,16 @@ func NewPageServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 	baseURL = strings.TrimRight(baseURL, "/")
 	pageServiceMethods := v1.File_pagereport_v1_pagereport_proto.Services().ByName("PageService").Methods()
 	return &pageServiceClient{
-		getAuthConfig: connect.NewClient[v1.GetAuthConfigRequest, v1.GetAuthConfigResponse](
+		getServerInfo: connect.NewClient[v1.GetServerInfoRequest, v1.GetServerInfoResponse](
 			httpClient,
-			baseURL+PageServiceGetAuthConfigProcedure,
-			connect.WithSchema(pageServiceMethods.ByName("GetAuthConfig")),
+			baseURL+PageServiceGetServerInfoProcedure,
+			connect.WithSchema(pageServiceMethods.ByName("GetServerInfo")),
+			connect.WithClientOptions(opts...),
+		),
+		whoAmI: connect.NewClient[v1.WhoAmIRequest, v1.WhoAmIResponse](
+			httpClient,
+			baseURL+PageServiceWhoAmIProcedure,
+			connect.WithSchema(pageServiceMethods.ByName("WhoAmI")),
 			connect.WithClientOptions(opts...),
 		),
 		uploadPage: connect.NewClient[v1.UploadPageRequest, v1.UploadPageResponse](
@@ -112,7 +123,8 @@ func NewPageServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 
 // pageServiceClient implements PageServiceClient.
 type pageServiceClient struct {
-	getAuthConfig *connect.Client[v1.GetAuthConfigRequest, v1.GetAuthConfigResponse]
+	getServerInfo *connect.Client[v1.GetServerInfoRequest, v1.GetServerInfoResponse]
+	whoAmI        *connect.Client[v1.WhoAmIRequest, v1.WhoAmIResponse]
 	uploadPage    *connect.Client[v1.UploadPageRequest, v1.UploadPageResponse]
 	listPages     *connect.Client[v1.ListPagesRequest, v1.ListPagesResponse]
 	getPage       *connect.Client[v1.GetPageRequest, v1.GetPageResponse]
@@ -120,9 +132,14 @@ type pageServiceClient struct {
 	prunePages    *connect.Client[v1.PrunePagesRequest, v1.PrunePagesResponse]
 }
 
-// GetAuthConfig calls pagereport.v1.PageService.GetAuthConfig.
-func (c *pageServiceClient) GetAuthConfig(ctx context.Context, req *connect.Request[v1.GetAuthConfigRequest]) (*connect.Response[v1.GetAuthConfigResponse], error) {
-	return c.getAuthConfig.CallUnary(ctx, req)
+// GetServerInfo calls pagereport.v1.PageService.GetServerInfo.
+func (c *pageServiceClient) GetServerInfo(ctx context.Context, req *connect.Request[v1.GetServerInfoRequest]) (*connect.Response[v1.GetServerInfoResponse], error) {
+	return c.getServerInfo.CallUnary(ctx, req)
+}
+
+// WhoAmI calls pagereport.v1.PageService.WhoAmI.
+func (c *pageServiceClient) WhoAmI(ctx context.Context, req *connect.Request[v1.WhoAmIRequest]) (*connect.Response[v1.WhoAmIResponse], error) {
+	return c.whoAmI.CallUnary(ctx, req)
 }
 
 // UploadPage calls pagereport.v1.PageService.UploadPage.
@@ -152,9 +169,12 @@ func (c *pageServiceClient) PrunePages(ctx context.Context, req *connect.Request
 
 // PageServiceHandler is an implementation of the pagereport.v1.PageService service.
 type PageServiceHandler interface {
-	// GetAuthConfig returns the identity-provider settings the CLI needs to run
-	// the OAuth device flow. Unauthenticated.
-	GetAuthConfig(context.Context, *connect.Request[v1.GetAuthConfigRequest]) (*connect.Response[v1.GetAuthConfigResponse], error)
+	// GetServerInfo returns public server metadata. Unauthenticated; the CLI
+	// calls it during `login` to tell the user where to mint a token.
+	GetServerInfo(context.Context, *connect.Request[v1.GetServerInfoRequest]) (*connect.Response[v1.GetServerInfoResponse], error)
+	// WhoAmI reports the identity behind the presented token. The CLI calls it
+	// to verify a pasted token before storing it.
+	WhoAmI(context.Context, *connect.Request[v1.WhoAmIRequest]) (*connect.Response[v1.WhoAmIResponse], error)
 	UploadPage(context.Context, *connect.Request[v1.UploadPageRequest]) (*connect.Response[v1.UploadPageResponse], error)
 	ListPages(context.Context, *connect.Request[v1.ListPagesRequest]) (*connect.Response[v1.ListPagesResponse], error)
 	GetPage(context.Context, *connect.Request[v1.GetPageRequest]) (*connect.Response[v1.GetPageResponse], error)
@@ -169,10 +189,16 @@ type PageServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewPageServiceHandler(svc PageServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	pageServiceMethods := v1.File_pagereport_v1_pagereport_proto.Services().ByName("PageService").Methods()
-	pageServiceGetAuthConfigHandler := connect.NewUnaryHandler(
-		PageServiceGetAuthConfigProcedure,
-		svc.GetAuthConfig,
-		connect.WithSchema(pageServiceMethods.ByName("GetAuthConfig")),
+	pageServiceGetServerInfoHandler := connect.NewUnaryHandler(
+		PageServiceGetServerInfoProcedure,
+		svc.GetServerInfo,
+		connect.WithSchema(pageServiceMethods.ByName("GetServerInfo")),
+		connect.WithHandlerOptions(opts...),
+	)
+	pageServiceWhoAmIHandler := connect.NewUnaryHandler(
+		PageServiceWhoAmIProcedure,
+		svc.WhoAmI,
+		connect.WithSchema(pageServiceMethods.ByName("WhoAmI")),
 		connect.WithHandlerOptions(opts...),
 	)
 	pageServiceUploadPageHandler := connect.NewUnaryHandler(
@@ -207,8 +233,10 @@ func NewPageServiceHandler(svc PageServiceHandler, opts ...connect.HandlerOption
 	)
 	return "/pagereport.v1.PageService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case PageServiceGetAuthConfigProcedure:
-			pageServiceGetAuthConfigHandler.ServeHTTP(w, r)
+		case PageServiceGetServerInfoProcedure:
+			pageServiceGetServerInfoHandler.ServeHTTP(w, r)
+		case PageServiceWhoAmIProcedure:
+			pageServiceWhoAmIHandler.ServeHTTP(w, r)
 		case PageServiceUploadPageProcedure:
 			pageServiceUploadPageHandler.ServeHTTP(w, r)
 		case PageServiceListPagesProcedure:
@@ -228,8 +256,12 @@ func NewPageServiceHandler(svc PageServiceHandler, opts ...connect.HandlerOption
 // UnimplementedPageServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedPageServiceHandler struct{}
 
-func (UnimplementedPageServiceHandler) GetAuthConfig(context.Context, *connect.Request[v1.GetAuthConfigRequest]) (*connect.Response[v1.GetAuthConfigResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("pagereport.v1.PageService.GetAuthConfig is not implemented"))
+func (UnimplementedPageServiceHandler) GetServerInfo(context.Context, *connect.Request[v1.GetServerInfoRequest]) (*connect.Response[v1.GetServerInfoResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("pagereport.v1.PageService.GetServerInfo is not implemented"))
+}
+
+func (UnimplementedPageServiceHandler) WhoAmI(context.Context, *connect.Request[v1.WhoAmIRequest]) (*connect.Response[v1.WhoAmIResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("pagereport.v1.PageService.WhoAmI is not implemented"))
 }
 
 func (UnimplementedPageServiceHandler) UploadPage(context.Context, *connect.Request[v1.UploadPageRequest]) (*connect.Response[v1.UploadPageResponse], error) {

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -145,45 +146,183 @@ func TestLogoutRedirect(t *testing.T) {
 	}
 }
 
-func TestGitHubValidator(t *testing.T) {
-	var calls int
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		if r.URL.Path != "/user" {
-			t.Errorf("unexpected path %s", r.URL.Path)
-		}
-		switch r.Header.Get("Authorization") {
-		case "Bearer good":
-			w.Write([]byte(`{"login":"octocat","id":42,"email":"octo@example.org"}`))
-		default:
-			w.WriteHeader(http.StatusUnauthorized)
-		}
-	}))
-	defer ts.Close()
+// --- CLI tokens ---
 
-	v := NewGitHubValidator()
-	v.BaseURL = ts.URL
-	v.HTTPClient = ts.Client()
-	ctx := context.Background()
+// fakeTokenStore is the persistence slice StoreValidator needs.
+type fakeTokenStore struct {
+	rec     TokenRecord
+	present bool
+	touched []time.Time
+}
 
-	id, err := v.Validate(ctx, "good")
+func (f *fakeTokenStore) GetToken(_ context.Context, id string) (TokenRecord, error) {
+	if !f.present || f.rec.ID != id {
+		return TokenRecord{}, errors.New("not found")
+	}
+	return f.rec, nil
+}
+
+func (f *fakeTokenStore) TouchToken(_ context.Context, _ string, at time.Time) error {
+	f.touched = append(f.touched, at)
+	return nil
+}
+
+func mintInto(t *testing.T, f *fakeTokenStore) string {
+	t.Helper()
+	m, err := Mint()
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Identity{Subject: "42", Login: "octocat", Email: "octo@example.org"}
-	if id != want {
-		t.Fatalf("got %+v, want %+v", id, want)
+	f.rec = TokenRecord{
+		ID: m.ID, Name: "laptop", Hash: m.Hash,
+		OwnerSubject: "sub-1", OwnerLogin: "alice", OwnerEmail: "alice@example.org",
 	}
+	f.present = true
+	return m.Plaintext
+}
 
-	// Second call must hit the cache.
-	if _, err := v.Validate(ctx, "good"); err != nil {
+func TestMintParseRoundTrip(t *testing.T) {
+	m, err := Mint()
+	if err != nil {
 		t.Fatal(err)
 	}
-	if calls != 1 {
-		t.Fatalf("expected 1 API call (cache hit on second), got %d", calls)
+	if !strings.HasPrefix(m.Plaintext, TokenPrefix) {
+		t.Errorf("plaintext %q lacks prefix %q", m.Plaintext, TokenPrefix)
+	}
+	gotID, secret, err := ParseToken(m.Plaintext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotID != m.ID {
+		t.Errorf("id round trip: got %q, want %q", gotID, m.ID)
+	}
+	if HashSecret(secret) != m.Hash {
+		t.Error("hash of parsed secret does not match the minted hash")
+	}
+	// The plaintext secret must not be derivable from what gets stored.
+	if strings.Contains(m.Hash, secret) {
+		t.Error("stored hash contains the secret")
 	}
 
-	if _, err := v.Validate(ctx, "bad"); err == nil {
-		t.Fatal("invalid token must fail")
+	other, err := Mint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other.Plaintext == m.Plaintext || other.ID == m.ID {
+		t.Error("Mint must not repeat itself")
+	}
+}
+
+func TestParseTokenRejectsMalformed(t *testing.T) {
+	cases := map[string]string{
+		"empty":         "",
+		"no prefix":     "abcdefghijkl_secret",
+		"wrong prefix":  "ghp_abcdefghijkl_secret",
+		"no separator":  TokenPrefix + "abcdefghijklsecret",
+		"empty id":      TokenPrefix + "_secret",
+		"empty secret":  TokenPrefix + "abcdefghijkl_",
+		"short id":      TokenPrefix + "abc_secret",
+		"long id":       TokenPrefix + "abcdefghijklmnop_secret",
+		"prefix only":   TokenPrefix,
+		"separator max": TokenPrefix + "_",
+	}
+	for name, in := range cases {
+		if _, _, err := ParseToken(in); !errors.Is(err, ErrInvalidToken) {
+			t.Errorf("%s (%q): got %v, want ErrInvalidToken", name, in, err)
+		}
+	}
+}
+
+func TestStoreValidatorAcceptsGoodToken(t *testing.T) {
+	f := &fakeTokenStore{}
+	plaintext := mintInto(t, f)
+
+	id, err := NewStoreValidator(f).Validate(context.Background(), plaintext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Identity{Subject: "sub-1", Email: "alice@example.org", Login: "alice"}
+	if id != want {
+		t.Fatalf("identity: got %+v, want %+v", id, want)
+	}
+	if len(f.touched) != 1 {
+		t.Errorf("first use must record last_used_at, got %d writes", len(f.touched))
+	}
+}
+
+func TestStoreValidatorRejections(t *testing.T) {
+	past := time.Now().Add(-time.Hour).UTC()
+	future := time.Now().Add(time.Hour).UTC()
+
+	t.Run("wrong secret", func(t *testing.T) {
+		f := &fakeTokenStore{}
+		plaintext := mintInto(t, f)
+		id, _, _ := ParseToken(plaintext)
+		forged := TokenPrefix + id + "_" + "not-the-secret"
+		if _, err := NewStoreValidator(f).Validate(context.Background(), forged); err == nil {
+			t.Fatal("a forged secret must be rejected")
+		}
+	})
+
+	t.Run("unknown id", func(t *testing.T) {
+		f := &fakeTokenStore{}
+		mintInto(t, f)
+		other, _ := Mint()
+		if _, err := NewStoreValidator(f).Validate(context.Background(), other.Plaintext); err == nil {
+			t.Fatal("an unknown id must be rejected")
+		}
+	})
+
+	t.Run("revoked", func(t *testing.T) {
+		f := &fakeTokenStore{}
+		plaintext := mintInto(t, f)
+		f.rec.RevokedAt = &past
+		if _, err := NewStoreValidator(f).Validate(context.Background(), plaintext); err == nil {
+			t.Fatal("a revoked token must be rejected")
+		}
+	})
+
+	t.Run("expired", func(t *testing.T) {
+		f := &fakeTokenStore{}
+		plaintext := mintInto(t, f)
+		f.rec.ExpiresAt = &past
+		if _, err := NewStoreValidator(f).Validate(context.Background(), plaintext); err == nil {
+			t.Fatal("an expired token must be rejected")
+		}
+	})
+
+	t.Run("not yet expired", func(t *testing.T) {
+		f := &fakeTokenStore{}
+		plaintext := mintInto(t, f)
+		f.rec.ExpiresAt = &future
+		if _, err := NewStoreValidator(f).Validate(context.Background(), plaintext); err != nil {
+			t.Fatalf("a live token must be accepted: %v", err)
+		}
+	})
+}
+
+// last_used_at is display-only bookkeeping; it must not cost a write on every
+// authenticated request against a single-connection database.
+func TestStoreValidatorThrottlesTouch(t *testing.T) {
+	f := &fakeTokenStore{}
+	plaintext := mintInto(t, f)
+	recent := time.Now().UTC()
+	f.rec.LastUsedAt = &recent
+
+	v := NewStoreValidator(f)
+	if _, err := v.Validate(context.Background(), plaintext); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.touched) != 0 {
+		t.Errorf("recent use must not be rewritten, got %d writes", len(f.touched))
+	}
+
+	stale := time.Now().Add(-2 * touchInterval).UTC()
+	f.rec.LastUsedAt = &stale
+	if _, err := v.Validate(context.Background(), plaintext); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.touched) != 1 {
+		t.Errorf("stale use must be refreshed, got %d writes", len(f.touched))
 	}
 }

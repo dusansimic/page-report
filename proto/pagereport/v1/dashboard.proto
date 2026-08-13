@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package pagereport.v1;
+
+import "pagereport/v1/pagereport.proto";
+
+option go_package = "github.com/dusan/page-report/gen/pagereport/v1;pagereportv1";
+
+// DashboardService is the browser-facing API used by the embedded React SPA.
+//
+// It is the only surface that accepts script-initiated requests, and it
+// authenticates with the session cookie rather than a bearer token. The server
+// additionally requires a same-origin Origin header on every call, and no CORS
+// handler is registered, so cross-origin callers are refused at the preflight.
+service DashboardService {
+  // GetSession describes the caller's login state. It is safe to call while
+  // logged out, which is how the landing page decides what to render.
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse) {}
+
+  // ListPages returns the caller's own pages, newest first.
+  rpc ListPages(DashboardServiceListPagesRequest) returns (DashboardServiceListPagesResponse) {}
+  rpc DeletePage(DashboardServiceDeletePageRequest) returns (DashboardServiceDeletePageResponse) {}
+
+  rpc ListTokens(ListTokensRequest) returns (ListTokensResponse) {}
+  // CreateToken mints a CLI token. The plaintext is in the response and is
+  // never retrievable again. Requires a recently authenticated session.
+  rpc CreateToken(CreateTokenRequest) returns (CreateTokenResponse) {}
+  // RotateToken replaces a token's secret, keeping its id and name. The old
+  // secret stops working immediately. Requires a recently authenticated
+  // session.
+  rpc RotateToken(RotateTokenRequest) returns (RotateTokenResponse) {}
+  rpc DeleteToken(DeleteTokenRequest) returns (DeleteTokenResponse) {}
+}
+
+message GetSessionRequest {}
+
+message GetSessionResponse {
+  bool authenticated = 1;
+  // Whether the identity is on the server's allowlist. A signed-in but
+  // non-allowlisted user can neither upload nor open reports.
+  bool allowed = 2;
+  string email = 3;
+  string login = 4;
+  string avatar_url = 5;
+  string login_url = 6;
+  string logout_url = 7;
+  // Whether the session authenticated recently enough to mint a token.
+  bool auth_is_fresh = 8;
+  // Default expiry, in seconds, preselected for new tokens. 0 means "never".
+  int64 token_default_ttl_seconds = 9;
+}
+
+message DashboardServiceListPagesRequest {}
+
+message DashboardServiceListPagesResponse {
+  repeated PageMeta pages = 1;
+}
+
+message DashboardServiceDeletePageRequest {
+  string id = 1;
+}
+
+message DashboardServiceDeletePageResponse {}
+
+// TokenMeta is everything about a token that survives minting. The secret is
+// not part of it: only a hash is stored, so it cannot be shown again.
+message TokenMeta {
+  string id = 1;
+  string name = 2;
+  // Human-facing identifier, e.g. "prt_ab12cd34ef56".
+  string display_prefix = 3;
+  // Unix seconds UTC. last_used_at and expires_at are 0 when unset.
+  int64 created_at = 4;
+  int64 last_used_at = 5;
+  int64 expires_at = 6;
+  bool revoked = 7;
+}
+
+message ListTokensRequest {}
+
+message ListTokensResponse {
+  repeated TokenMeta tokens = 1;
+}
+
+message CreateTokenRequest {
+  string name = 1;
+  // 0 means the token never expires.
+  int64 expires_in_seconds = 2;
+}
+
+message CreateTokenResponse {
+  TokenMeta meta = 1;
+  // The plaintext token, returned exactly once.
+  string token = 2;
+}
+
+message RotateTokenRequest {
+  string id = 1;
+}
+
+message RotateTokenResponse {
+  TokenMeta meta = 1;
+  // The plaintext token, returned exactly once.
+  string token = 2;
+}
+
+message DeleteTokenRequest {
+  string id = 1;
+}
+
+message DeleteTokenResponse {}
