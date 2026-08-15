@@ -71,7 +71,7 @@ jobs:
 
       - run: go build ./...
 
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
 
@@ -91,9 +91,12 @@ jobs:
       - run: buf lint
       - run: buf format --diff --exit-code
 
+      # actions/checkout leaves no local `main` ref on a PR, so `branch=main`
+      # cannot resolve. The base SHA is both present in history (fetch-depth 0)
+      # and more precise: it is what this PR actually merges into.
       - name: buf breaking
         if: github.event_name == 'pull_request'
-        run: buf breaking --against '.git#branch=main'
+        run: buf breaking --against ".git#ref=${{ github.event.pull_request.base.sha }}"
 
       # ---- tree-mutating checks, last so nothing above sees a dirty tree ----
       - name: go.mod is tidy
