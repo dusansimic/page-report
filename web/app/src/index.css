@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #09090b;
+  --color-panel: #101014;
+  --color-line: #26262e;
+  --color-fg: #e8e8ea;
+  --color-muted: #8a8a95;
+  --color-accent: #7dd3fc;
+  --color-good: #86efac;
+  --color-warn: #fcd34d;
+  --color-bad: #fb7185;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-bg text-fg antialiased;
+    font-family:
+      ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  code,
+  pre {
+    font-family: ui-monospace, "JetBrains Mono", Menlo, monospace;
+  }
+  :focus-visible {
+    @apply outline-accent outline-2 outline-offset-2;
+  }
+}

@@ -1,0 +1,15 @@
+# Local development. The SPA and the API must look like one origin to the
+# browser, so the Vite dev server owns the page and proxies /pagereport.v1.*,
+# /auth, /p and /healthz to the Go server.
+#
+# Point config.yml at the dev server:
+#   dev: true
+#   base_url: "http://localhost:5173"
+#
+# Then open http://localhost:5173. The Go server on :8080 is only reached
+# through the proxy.
+procs:
+  server:
+    shell: go run ./cmd/pr-server
+  web:
+    shell: pnpm --dir web/app dev

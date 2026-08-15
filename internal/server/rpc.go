@@ -18,18 +18,29 @@ type rpcService struct {
 	s *Server
 }
 
-func (r *rpcService) GetAuthConfig(
+func (r *rpcService) GetServerInfo(
+	_ context.Context,
+	_ *connect.Request[pagereportv1.GetServerInfoRequest],
+) (*connect.Response[pagereportv1.GetServerInfoResponse], error) {
+	return connect.NewResponse(&pagereportv1.GetServerInfoResponse{
+		BaseUrl:       r.s.cfg.BaseURL,
+		TokensUrl:     r.s.cfg.TokensURL(),
+		ServerVersion: Version,
+	}), nil
+}
+
+func (r *rpcService) WhoAmI(
 	ctx context.Context,
-	_ *connect.Request[pagereportv1.GetAuthConfigRequest],
-) (*connect.Response[pagereportv1.GetAuthConfigResponse], error) {
-	ac := r.s.authCfg.AuthConfig()
-	return connect.NewResponse(&pagereportv1.GetAuthConfigResponse{
-		Provider:       ac.Provider,
-		Issuer:         ac.Issuer,
-		ClientId:       ac.ClientID,
-		Scopes:         ac.Scopes,
-		DeviceEndpoint: ac.DeviceEndpoint,
-		TokenEndpoint:  ac.TokenEndpoint,
+	_ *connect.Request[pagereportv1.WhoAmIRequest],
+) (*connect.Response[pagereportv1.WhoAmIResponse], error) {
+	identity, _ := IdentityFrom(ctx)
+	info, _ := TokenInfoFrom(ctx)
+	return connect.NewResponse(&pagereportv1.WhoAmIResponse{
+		Subject:   identity.Subject,
+		Email:     identity.Email,
+		Login:     identity.Login,
+		TokenId:   info.TokenID,
+		TokenName: info.TokenName,
 	}), nil
 }
 
@@ -71,13 +82,14 @@ func (r *rpcService) UploadPage(
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 		err = r.s.store.CreatePage(ctx, store.Page{
-			ID:          newID,
-			Title:       req.Msg.GetTitle(),
-			Content:     content,
-			ContentType: contentType,
-			SizeBytes:   int64(len(content)),
-			CreatedAt:   time.Now().UTC(),
-			CreatedBy:   createdBy,
+			ID:           newID,
+			Title:        req.Msg.GetTitle(),
+			Content:      content,
+			ContentType:  contentType,
+			SizeBytes:    int64(len(content)),
+			CreatedAt:    time.Now().UTC(),
+			CreatedBy:    createdBy,
+			OwnerSubject: identity.Subject,
 		})
 		if err == nil {
 			pageID = newID
@@ -99,13 +111,13 @@ func (r *rpcService) ListPages(
 	ctx context.Context,
 	_ *connect.Request[pagereportv1.ListPagesRequest],
 ) (*connect.Response[pagereportv1.ListPagesResponse], error) {
-	pages, err := r.s.store.ListPages(ctx)
+	pages, err := r.s.store.ListPagesByOwner(ctx, OwnerFrom(ctx))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	resp := &pagereportv1.ListPagesResponse{}
 	for _, p := range pages {
-		resp.Pages = append(resp.Pages, r.meta(p))
+		resp.Pages = append(resp.Pages, r.s.pageMeta(p))
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -114,14 +126,14 @@ func (r *rpcService) GetPage(
 	ctx context.Context,
 	req *connect.Request[pagereportv1.GetPageRequest],
 ) (*connect.Response[pagereportv1.GetPageResponse], error) {
-	p, err := r.s.store.GetPage(ctx, req.Msg.GetId())
+	p, err := r.s.store.GetPageForOwner(ctx, req.Msg.GetId(), OwnerFrom(ctx))
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	resp := &pagereportv1.GetPageResponse{Meta: r.meta(p)}
+	resp := &pagereportv1.GetPageResponse{Meta: r.s.pageMeta(p)}
 	if req.Msg.GetIncludeContent() {
 		resp.Content = p.Content
 	}
@@ -132,7 +144,7 @@ func (r *rpcService) DeletePage(
 	ctx context.Context,
 	req *connect.Request[pagereportv1.DeletePageRequest],
 ) (*connect.Response[pagereportv1.DeletePageResponse], error) {
-	err := r.s.store.DeletePage(ctx, req.Msg.GetId())
+	err := r.s.store.DeletePageForOwner(ctx, req.Msg.GetId(), OwnerFrom(ctx))
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
@@ -152,14 +164,16 @@ func (r *rpcService) PrunePages(
 			errors.New("older_than_seconds must be positive"))
 	}
 	cutoff := time.Now().Add(-time.Duration(olderThan) * time.Second)
-	n, err := r.s.store.PrunePages(ctx, cutoff)
+	n, err := r.s.store.PrunePagesForOwner(ctx, cutoff, OwnerFrom(ctx))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&pagereportv1.PrunePagesResponse{DeletedCount: n}), nil
 }
 
-func (r *rpcService) meta(p store.Page) *pagereportv1.PageMeta {
+// pageMeta is shared by both services so the CLI and the dashboard describe a
+// page identically.
+func (s *Server) pageMeta(p store.Page) *pagereportv1.PageMeta {
 	return &pagereportv1.PageMeta{
 		Id:          p.ID,
 		Title:       p.Title,
@@ -167,6 +181,6 @@ func (r *rpcService) meta(p store.Page) *pagereportv1.PageMeta {
 		SizeBytes:   p.SizeBytes,
 		CreatedAt:   p.CreatedAt.Unix(),
 		CreatedBy:   p.CreatedBy,
-		Url:         r.s.cfg.PageURL(p.ID),
+		Url:         s.cfg.PageURL(p.ID),
 	}
 }

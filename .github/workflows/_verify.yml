@@ -27,14 +27,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - uses: bufbuild/buf-setup-action@v1
+      - uses: bufbuild/buf-action@v1
         with:
-          github_token: ${{ github.token }}
+          setup_only: true
 
       # ---- generic hygiene ----
       - name: Trailing whitespace
         run: |
-          if git ls-files -z -- . ':(exclude)gen/' \
+          if git ls-files -z -- . ':(exclude)gen/' ':(exclude)web/app/src/gen/' \
                | xargs -0 -r grep -lIPn '[ \t]+$'; then
             echo "::error::trailing whitespace in the files above"
             exit 1
@@ -48,7 +48,7 @@ jobs:
             grep -qI . "$f" 2>/dev/null || continue   # skip binary
             [ "$(tail -c1 "$f" | wc -l)" -eq 1 ] \
               || { echo "::error file=$f::missing final newline"; fail=1; }
-          done < <(git ls-files -z -- . ':(exclude)gen/')
+          done < <(git ls-files -z -- . ':(exclude)gen/' ':(exclude)web/app/src/gen/')
           exit "$fail"
 
       - name: YAML parses
@@ -102,11 +102,43 @@ jobs:
           git diff --exit-code -- go.mod go.sum \
             || { echo "::error::run 'go mod tidy' and commit the result"; exit 1; }
 
+      # buf writes two trees: Go into gen/ and TypeScript for the SPA into
+      # web/app/src/gen/. Both have to match the proto.
       - name: gen/ matches proto
         run: |
           buf generate
-          git diff --exit-code -- gen/ \
+          git diff --exit-code -- gen/ web/app/src/gen/ \
             || { echo "::error::gen/ is stale or hand-edited; run 'buf generate'"; exit 1; }
+
+  # The frontend checks that used to be the web-lint / web-typecheck
+  # pre-commit hooks, plus the build that Dockerfile's node stage does.
+  web:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: web/app
+    steps:
+      - uses: actions/checkout@v7
+
+      # `defaults.run.working-directory` does not apply to `uses:` steps, so
+      # this has to be pointed at the manifest explicitly — the repo root has
+      # no package.json to read the pnpm version from.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/app/package.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/app/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
 
   test:
     runs-on: ubuntu-latest

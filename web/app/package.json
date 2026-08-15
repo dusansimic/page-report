@@ -1,0 +1,41 @@
+{
+  "name": "page-report-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "typecheck": "tsc -b --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.13.0",
+    "@connectrpc/connect": "^2.1.2",
+    "@connectrpc/connect-query": "^2.3.1",
+    "@connectrpc/connect-web": "^2.1.2",
+    "@tanstack/react-query": "^5.101.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.31.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router": "^8.3.0",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.6.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "oxlint": "^1.75.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0"
+  }
+}

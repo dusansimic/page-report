@@ -7,25 +7,32 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
-
-	"golang.org/x/oauth2"
+	"strings"
 )
 
+// TokenEnvVar overrides the stored credentials. Agents and CI use it to run
+// without a login step.
+const TokenEnvVar = "PR_TOKEN"
+
 // Credentials is the on-disk shape of ~/.config/page-report/credentials.json.
+// The server mints tokens itself now, so there is nothing to refresh and
+// nothing provider-specific to remember: the file holds the token and the
+// server it belongs to.
 type Credentials struct {
-	ServerURL     string    `json:"server_url"`
-	Provider      string    `json:"provider"`
-	ClientID      string    `json:"client_id"`
-	TokenEndpoint string    `json:"token_endpoint"`
-	AccessToken   string    `json:"access_token"`
-	IDToken       string    `json:"id_token,omitempty"`
-	RefreshToken  string    `json:"refresh_token,omitempty"`
-	Expiry        time.Time `json:"expiry,omitempty"`
+	ServerURL string `json:"server_url"`
+	Token     string `json:"token"`
 }
 
 // ErrNotLoggedIn is returned when no stored credentials exist.
 var ErrNotLoggedIn = errors.New("not logged in: run `page-report login` first")
+
+// ErrLegacyCredentials is returned for a credentials file written by a version
+// that authenticated through the identity provider's device flow. Those
+// tokens are not accepted any more, and silently sending an empty bearer would
+// surface as a confusing 401.
+var ErrLegacyCredentials = errors.New(
+	"credentials are from an older version that used device-flow login: " +
+		"run `page-report login` to create a token in the web dashboard")
 
 func credentialsPath() (string, error) {
 	dir, err := configDir()
@@ -70,6 +77,11 @@ func Load() (Credentials, error) {
 	if err := json.Unmarshal(data, &creds); err != nil {
 		return Credentials{}, fmt.Errorf("decode credentials %s: %w", path, err)
 	}
+	if creds.Token == "" {
+		// The file exists but carries no usable token: either the old
+		// device-flow shape, or something truncated. Say so explicitly.
+		return Credentials{}, ErrLegacyCredentials
+	}
 	return creds, nil
 }
 
@@ -84,60 +96,18 @@ func Delete() error {
 	return nil
 }
 
-// StoredTokenSource implements TokenSource on top of the credentials file.
-// For OIDC it refreshes the token when it is about to expire and persists the
-// rotated credentials; the bearer sent to the server is the id_token (falling
-// back to the access token). For GitHub the long-lived access token is
-// returned as-is.
+// StoredTokenSource supplies the bearer token for authenticated RPCs. PR_TOKEN
+// wins over the credentials file so a one-off or CI invocation does not need
+// to touch the user's config.
 type StoredTokenSource struct{}
 
-func (StoredTokenSource) Token(ctx context.Context) (string, error) {
+func (StoredTokenSource) Token(context.Context) (string, error) {
+	if tok := strings.TrimSpace(os.Getenv(TokenEnvVar)); tok != "" {
+		return tok, nil
+	}
 	creds, err := Load()
 	if err != nil {
 		return "", err
 	}
-
-	if creds.Provider == "oidc" && !creds.Expiry.IsZero() &&
-		time.Until(creds.Expiry) < time.Minute {
-		if creds.RefreshToken == "" {
-			return "", errors.New("token expired and no refresh token stored: run `page-report login`")
-		}
-		creds, err = refresh(ctx, creds)
-		if err != nil {
-			return "", fmt.Errorf("token refresh failed (run `page-report login`): %w", err)
-		}
-	}
-
-	if creds.Provider == "oidc" && creds.IDToken != "" {
-		return creds.IDToken, nil
-	}
-	return creds.AccessToken, nil
-}
-
-func refresh(ctx context.Context, creds Credentials) (Credentials, error) {
-	oc := &oauth2.Config{
-		ClientID: creds.ClientID,
-		Endpoint: oauth2.Endpoint{TokenURL: creds.TokenEndpoint},
-	}
-	stale := &oauth2.Token{
-		AccessToken:  creds.AccessToken,
-		RefreshToken: creds.RefreshToken,
-		Expiry:       creds.Expiry,
-	}
-	fresh, err := oc.TokenSource(ctx, stale).Token()
-	if err != nil {
-		return Credentials{}, err
-	}
-	creds.AccessToken = fresh.AccessToken
-	creds.Expiry = fresh.Expiry
-	if rt := fresh.RefreshToken; rt != "" {
-		creds.RefreshToken = rt
-	}
-	if idt, _ := fresh.Extra("id_token").(string); idt != "" {
-		creds.IDToken = idt
-	}
-	if err := Save(creds); err != nil {
-		return Credentials{}, err
-	}
-	return creds, nil
+	return creds.Token, nil
 }

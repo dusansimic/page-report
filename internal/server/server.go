@@ -1,41 +1,23 @@
-// Package server implements the HTTP surface: a public app domain (homepage,
-// health, ConnectRPC API) and an isolated pages domain (web login + report
-// serving). Routing is by request host; all URLs are built from configured
-// base URLs, never from the request.
+// Package server implements the HTTP surface. Everything is served from one
+// origin: the React SPA, the ConnectRPC APIs, the OAuth routes, and the
+// sandboxed report pages at /p/{id}. All URLs are built from the configured
+// base URL, never from the request's Host header.
 package server
 
 import (
-	"net"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/dusan/page-report/gen/pagereport/v1/pagereportv1connect"
 	"github.com/dusan/page-report/internal/auth"
 	"github.com/dusan/page-report/internal/config"
 	"github.com/dusan/page-report/internal/store"
-	"github.com/dusan/page-report/web"
 )
 
-// SessionReader extracts the authenticated identity from a request's session
-// cookie, if any. ok=false means not logged in.
+// SessionReader decodes the session cookie. ok=false means not logged in.
 type SessionReader interface {
+	Get(r *http.Request) (auth.Session, bool)
 	Identity(r *http.Request) (auth.Identity, bool)
-}
-
-// AuthConfig is the device-flow configuration served to the CLI.
-type AuthConfig struct {
-	Provider       string
-	Issuer         string
-	ClientID       string
-	Scopes         []string
-	DeviceEndpoint string
-	TokenEndpoint  string
-}
-
-// AuthConfigProvider supplies the settings returned by the GetAuthConfig RPC.
-type AuthConfigProvider interface {
-	AuthConfig() AuthConfig
 }
 
 type Server struct {
@@ -44,59 +26,75 @@ type Server struct {
 	validator  auth.TokenValidator
 	allow      *auth.Allowlist
 	sessions   SessionReader
-	authCfg    AuthConfigProvider
 	authRoutes http.Handler
-
-	appHost   string
-	pagesHost string
+	spa        *spaHandler
 }
 
 func New(cfg *config.Config, st store.Store, validator auth.TokenValidator,
-	allow *auth.Allowlist, sessions SessionReader, authCfg AuthConfigProvider,
-	authRoutes http.Handler) *Server {
+	allow *auth.Allowlist, sessions SessionReader, authRoutes http.Handler) *Server {
 	return &Server{
 		cfg:        cfg,
 		store:      st,
 		validator:  validator,
 		allow:      allow,
 		sessions:   sessions,
-		authCfg:    authCfg,
 		authRoutes: authRoutes,
-		appHost:    hostOf(cfg.AppBaseURL),
-		pagesHost:  hostOf(cfg.PagesBaseURL),
+		spa:        newSPAHandler(),
 	}
 }
 
-// Handler returns the root handler dispatching between the app and pages
-// muxes by request host.
+// Handler returns the root handler.
 func (s *Server) Handler() http.Handler {
-	appMux := http.NewServeMux()
-	appMux.HandleFunc("GET /{$}", s.handleHome)
-	appMux.HandleFunc("GET /healthz", s.handleHealth)
-	appMux.Handle("GET /static/", http.FileServerFS(web.StaticFS))
-	rpcPath, rpcHandler := pagereportv1connect.NewPageServiceHandler(
-		&rpcService{s: s},
-		s.connectOptions()...,
-	)
-	appMux.Handle(rpcPath, guardScriptedFetch(rpcHandler))
+	mux := http.NewServeMux()
 
-	pagesMux := http.NewServeMux()
-	pagesMux.HandleFunc("GET /{$}", s.handleLanding)
+	mux.HandleFunc("GET /healthz", s.handleHealth)
 	if s.authRoutes != nil {
-		pagesMux.Handle("/auth/", s.authRoutes)
+		mux.Handle("/auth/", s.authRoutes)
 	}
-	pagesMux.HandleFunc("GET /p/{id}", s.handlePage)
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch requestHost(r) {
-		case s.appHost:
-			appMux.ServeHTTP(w, r)
-		case s.pagesHost:
-			pagesMux.ServeHTTP(w, r)
-		default:
-			http.NotFound(w, r)
+	// The CLI API: bearer-authenticated and, by design, unreachable from a
+	// browser. guardScriptedFetch is what enforces the second half.
+	pagePath, pageHandler := pagereportv1connect.NewPageServiceHandler(
+		&rpcService{s: s}, s.connectOptions()...,
+	)
+	mux.Handle(pagePath, guardScriptedFetch(pageHandler))
+
+	// The browser API. This is the one surface that accepts script-initiated
+	// requests, so it carries its own origin + session checks.
+	dashPath, dashHandler := pagereportv1connect.NewDashboardServiceHandler(
+		&dashboardService{s: s}, s.dashboardOptions()...,
+	)
+	mux.Handle(dashPath, s.guardDashboard(dashHandler))
+
+	// Report pages. Registered as a more specific pattern than the SPA
+	// fallback below, so ServeMux routes /p/{id} here and never to the SPA.
+	mux.HandleFunc("GET /p/{id}", s.handlePage)
+
+	mux.Handle("GET /assets/", s.spa.assets())
+	mux.HandleFunc("/", s.serveSPA)
+
+	return mux
+}
+
+// apiPrefixes are the paths that belong to a handler rather than to the SPA's
+// client-side router. A request under one of these that reaches the fallback
+// is a mistake — a typo'd RPC, a stale client — and must 404 rather than
+// silently return the SPA's HTML shell with a 200.
+var apiPrefixes = []string{
+	"/pagereport.",
+	"/auth/",
+	"/healthz",
+	"/p/",
+	"/assets/",
+}
+
+func isAPIPath(p string) bool {
+	for _, prefix := range apiPrefixes {
+		if strings.HasPrefix(p, prefix) {
+			return true
 		}
-	})
+	}
+	return false
 }
 
 // denyScriptedFetch rejects requests a browser marks as script-initiated. It
@@ -106,9 +104,9 @@ func (s *Server) Handler() http.Handler {
 // the header entirely and pass through; reports are only ever loaded as
 // top-level documents. It returns true when the request was handled.
 //
-// This also refuses browser-originated calls to the RPC API, which is
-// bearer-auth and CLI-only by design. A future browser web UI would need to
-// relax this.
+// This also refuses browser-originated calls to the CLI API, which is
+// bearer-auth and CLI-only by design. The SPA does not use that API; it talks
+// to DashboardService, which is guarded by guardDashboard instead.
 func denyScriptedFetch(w http.ResponseWriter, r *http.Request) bool {
 	switch r.Header.Get("Sec-Fetch-Dest") {
 	case "", "document":
@@ -128,18 +126,13 @@ func guardScriptedFetch(h http.Handler) http.Handler {
 	})
 }
 
-func hostOf(baseURL string) string {
-	u, err := url.Parse(baseURL)
-	if err != nil {
-		return ""
+// sameOrigin reports whether the request's Origin header matches the
+// configured base URL. A missing Origin is reported separately so callers can
+// require it on state-changing methods while tolerating its absence on GET.
+func (s *Server) sameOrigin(r *http.Request) (present, ok bool) {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return false, false
 	}
-	return strings.ToLower(u.Hostname())
-}
-
-func requestHost(r *http.Request) string {
-	host := r.Host
-	if h, _, err := net.SplitHostPort(host); err == nil {
-		host = h
-	}
-	return strings.ToLower(host)
+	return true, strings.EqualFold(strings.TrimRight(origin, "/"), s.cfg.BaseURL)
 }
