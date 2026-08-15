@@ -128,7 +128,7 @@ jobs:
       # `defaults.run.working-directory` does not apply to `uses:` steps, so
       # this has to be pointed at the manifest explicitly — the repo root has
       # no package.json to read the pnpm version from.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: web/app/package.json
 
