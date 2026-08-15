@@ -1,0 +1,158 @@
+# Reusable gate. Every build job in ci.yml and release.yml declares
+# `needs: verify`, so nothing compiles or publishes until all of this is green.
+# These checks replace the .pre-commit-config.yaml that used to hold them; the
+# auto-fixing hooks became check-only steps that report and fail rather than
+# rewriting the tree.
+#
+# Depends on tools preinstalled on the GitHub-hosted runner image: yq, jq,
+# shellcheck, du. If a future image drops one, the failure will point here.
+name: _verify
+
+on:
+  workflow_call:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # fetch-depth: 0 so `buf breaking --against .git#branch=main` has history.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+
+      # ---- generic hygiene ----
+      - name: Trailing whitespace
+        run: |
+          if git ls-files -z -- . ':(exclude)gen/' ':(exclude)web/app/src/gen/' \
+               | xargs -0 -r grep -lIPn '[ \t]+$'; then
+            echo "::error::trailing whitespace in the files above"
+            exit 1
+          fi
+
+      - name: Final newline
+        run: |
+          fail=0
+          while IFS= read -r -d '' f; do
+            [ -s "$f" ] || continue
+            grep -qI . "$f" 2>/dev/null || continue   # skip binary
+            [ "$(tail -c1 "$f" | wc -l)" -eq 1 ] \
+              || { echo "::error file=$f::missing final newline"; fail=1; }
+          done < <(git ls-files -z -- . ':(exclude)gen/' ':(exclude)web/app/src/gen/')
+          exit "$fail"
+
+      - name: YAML parses
+        run: git ls-files -z '*.yml' '*.yaml' | xargs -0 -r -n1 yq '.' > /dev/null
+
+      - name: No large files
+        run: |
+          big=$(git ls-files -z | xargs -0 -r du -k | awk '$1 > 500 { print $2 }')
+          [ -z "$big" ] || { echo "::error::over 500 KiB: $big"; exit 1; }
+
+      # ---- Go ----
+      - name: gofmt
+        run: |
+          out=$(gofmt -l . | grep -v '^gen/' || true)
+          [ -z "$out" ] || { echo "::error::gofmt needed: $out"; exit 1; }
+
+      # Duplicated by golangci-lint's govet on purpose: costs seconds, and
+      # still reports if the golangci config ever fails to load.
+      - run: go vet ./...
+
+      - run: go build ./...
+
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+
+      # ---- shell ----
+      - name: shellcheck
+        run: git ls-files -z '*.sh' | xargs -0 -r shellcheck
+
+      # ---- workflows ----
+      # Installed from a pinned tag rather than the upstream curl-to-bash
+      # installer, which fetches from main. Go is already set up here.
+      - name: actionlint
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          actionlint -color
+
+      # ---- proto ----
+      - run: buf lint
+      - run: buf format --diff --exit-code
+
+      # actions/checkout leaves no local `main` ref on a PR, so `branch=main`
+      # cannot resolve. The base SHA is both present in history (fetch-depth 0)
+      # and more precise: it is what this PR actually merges into.
+      - name: buf breaking
+        if: github.event_name == 'pull_request'
+        run: buf breaking --against ".git#ref=${{ github.event.pull_request.base.sha }}"
+
+      # ---- tree-mutating checks, last so nothing above sees a dirty tree ----
+      - name: go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum \
+            || { echo "::error::run 'go mod tidy' and commit the result"; exit 1; }
+
+      # buf writes two trees: Go into gen/ and TypeScript for the SPA into
+      # web/app/src/gen/. Both have to match the proto.
+      - name: gen/ matches proto
+        run: |
+          buf generate
+          git diff --exit-code -- gen/ web/app/src/gen/ \
+            || { echo "::error::gen/ is stale or hand-edited; run 'buf generate'"; exit 1; }
+
+  # The frontend checks that used to be the web-lint / web-typecheck
+  # pre-commit hooks, plus the build that Dockerfile's node stage does.
+  web:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: web/app
+    steps:
+      - uses: actions/checkout@v7
+
+      # `defaults.run.working-directory` does not apply to `uses:` steps, so
+      # this has to be pointed at the manifest explicitly — the repo root has
+      # no package.json to read the pnpm version from.
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: web/app/package.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/app/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
+
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - run: go test -race ./...

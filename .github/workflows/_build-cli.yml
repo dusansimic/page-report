@@ -1,0 +1,71 @@
+# Reusable CLI builder. The version string is supplied by the caller rather
+# than derived here, so the CLI and the container image always report the same
+# one for a given run.
+name: _build-cli
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      retention-days:
+        required: false
+        type: number
+        default: 7
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The commit timestamp, not wall-clock: wall-clock differs per matrix leg
+      # and per re-run, which would make the four tarballs of one release
+      # disagree about their build date.
+      - id: date
+        run: echo "iso=$(git log -1 --format=%cI)" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        env:
+          CGO_ENABLED: '0'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          go build -trimpath \
+            -ldflags="-s -w \
+              -X main.version=${{ inputs.version }} \
+              -X main.commit=${{ github.sha }} \
+              -X main.date=${{ steps.date.outputs.iso }}" \
+            -o dist/page-report ./cmd/page-report
+
+      # Only the native build can be executed on the runner.
+      - name: Smoke test
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: ./dist/page-report version
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: page-report-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/page-report
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}

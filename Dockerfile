@@ -15,7 +15,16 @@ COPY . .
 # Overwrites the .gitkeep-only placeholder that keeps `go build` working
 # without a Node toolchain.
 COPY --from=web /src/web/app/dist ./web/app/dist
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pr-server ./cmd/pr-server
+
+# Declared after `go mod download` so a version change does not invalidate the
+# dependency layer. Defaults keep `docker compose up --build` working with no
+# build args.
+ARG VERSION=dev
+ARG COMMIT=""
+ARG DATE=""
+RUN CGO_ENABLED=0 go build -trimpath \
+      -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
+      -o /out/pr-server ./cmd/pr-server
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/pr-server /pr-server

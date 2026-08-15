@@ -11,7 +11,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	golang.org/x/mod v0.36.0
 	golang.org/x/term v0.45.0
-	google.golang.org/protobuf v1.36.11
+	google.golang.org/protobuf v1.36.12
 	modernc.org/sqlite v1.53.0
 )
 
@@ -41,4 +41,9 @@ require (
 	modernc.org/libc v1.73.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
+)
+
+tool (
+	connectrpc.com/connect/cmd/protoc-gen-connect-go
+	google.golang.org/protobuf/cmd/protoc-gen-go
 )

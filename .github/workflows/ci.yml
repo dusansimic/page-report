@@ -1,55 +1,56 @@
+# Every commit: verify, then build both artifacts. No side effects outside the
+# run — no registry push, no release, no contents: write.
+#
+# There are deliberately no path filters. They would be evaluated for tag
+# pushes too (where there is no meaningful diff), and a skipped job never
+# reports a status, which breaks required checks on main.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  go:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-      # No frontend build here on purpose: `go build ./...` has to keep working
-      # on a machine with no Node toolchain, which the dist/.gitkeep
-      # placeholder is what makes possible.
-      - run: go build ./...
-      - run: go vet ./...
-      - run: go test ./...
+  verify:
+    uses: ./.github/workflows/_verify.yml
+    permissions:
+      contents: read
 
-  web:
+  meta:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web/app
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.v.outputs.version }}
     steps:
       - uses: actions/checkout@v7
-      # `defaults.run.working-directory` does not apply to `uses:` steps, so
-      # this has to be pointed at the manifest explicitly — the repo root has
-      # no package.json to read the pnpm version from.
-      - uses: pnpm/action-setup@v4
         with:
-          package_json_file: web/app/package.json
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: web/app/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm build
+          fetch-depth: 0
 
-  proto:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: bufbuild/buf-action@v1
-        with:
-          setup_only: true
-      - run: buf lint
-      - run: buf format --diff --exit-code
+      - id: v
+        run: echo "version=$(git describe --tags --always)" >> "$GITHUB_OUTPUT"
+
+  cli:
+    needs: [verify, meta]
+    uses: ./.github/workflows/_build-cli.yml
+    permissions:
+      contents: read
+    with:
+      version: ${{ needs.meta.outputs.version }}
+      retention-days: 7
+
+  image:
+    needs: [verify, meta]
+    uses: ./.github/workflows/_build-image.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ needs.meta.outputs.version }}
+      push: false

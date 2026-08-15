@@ -1,9 +1,12 @@
 version: v2
+# Plugins run through `go tool` so their versions are pinned by the `tool`
+# directives in go.mod: a fresh clone needs only Go and buf, and CI can assert
+# that gen/ matches the proto.
 plugins:
-  - local: protoc-gen-go
+  - local: ["go", "tool", "protoc-gen-go"]
     out: gen
     opt: paths=source_relative
-  - local: protoc-gen-connect-go
+  - local: ["go", "tool", "protoc-gen-connect-go"]
     out: gen
     opt: paths=source_relative
   # TypeScript for the embedded SPA. connect-es v2 builds its clients from the

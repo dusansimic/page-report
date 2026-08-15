@@ -1,0 +1,45 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+  settings:
+    errcheck:
+      # Every entry here is a call whose error the caller cannot act on:
+      # a close on a cleanup path where the real error is already being
+      # returned, or a write to an already-committed response.
+      exclude-functions:
+        - (io.Closer).Close
+        - (*os.File).Close
+        - (*database/sql.DB).Close
+        - (*database/sql.Rows).Close
+        - (*compress/gzip.Reader).Close
+        - (github.com/dusan/page-report/internal/store.Store).Close
+        - os.Remove
+        - (net/http.ResponseWriter).Write
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (*github.com/spf13/cobra.Command).MarkFlagRequired
+
+  exclusions:
+    generated: lax
+    paths:
+      - gen
+    rules:
+      # Table-driven tests routinely ignore errors on purpose.
+      - path: _test\.go
+        linters: [errcheck]
+
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - gen

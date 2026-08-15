@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +19,15 @@ import (
 	"github.com/dusan/page-report/internal/config"
 	"github.com/dusan/page-report/internal/server"
 	"github.com/dusan/page-report/internal/store"
+)
+
+// Build metadata, injected via -ldflags "-X main.version=..." by the release
+// workflow (and by the Dockerfile's VERSION/COMMIT/DATE build args). Without
+// ldflags these keep their dev defaults.
+var (
+	version = "dev"
+	commit  = ""
+	date    = ""
 )
 
 // tokenStore adapts store.Store to the narrow interface the token validator
@@ -57,7 +67,15 @@ func main() {
 
 func run() error {
 	configPath := flag.String("config", "", "path to YAML config file (default: ./config.yml if present)")
+	showVersion := flag.Bool("version", false, "print build metadata and exit")
 	flag.Parse()
+
+	// Answered before touching config or the database so that `-version` works
+	// on a container that is otherwise unconfigured.
+	if *showVersion {
+		fmt.Printf("pr-server %s (%s, %s)\n", version, commit, date)
+		return nil
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -94,7 +112,8 @@ func run() error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("listening on %s (base url: %s)", cfg.ListenAddr, cfg.BaseURL)
+		log.Printf("pr-server %s listening on %s (base url: %s)",
+			version, cfg.ListenAddr, cfg.BaseURL)
 		errCh <- httpServer.ListenAndServe()
 	}()
 
