@@ -17,7 +17,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      # fetch-depth: 0 so `buf breaking --against .git#branch=main` has history.
+      # fetch-depth: 0 so `buf breaking` can reach the PR base commit.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -132,7 +132,7 @@ jobs:
         with:
           package_json_file: web/app/package.json
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
