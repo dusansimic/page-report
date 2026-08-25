@@ -75,7 +75,7 @@ Published to `ghcr.io/dusansimic/page-report` for `linux/amd64` and
 | `vX.Y.Z` | that exact release |
 | `X.Y` | newest stable patch of that minor |
 | `latest` | newest stable release — never untagged `main` |
-| `edge` | newest `main` commit, if `main` publishing is enabled |
+| `main` | newest commit on `main` — unreviewed, moves often |
 | `sha-<sha>` | one specific commit |
 
 A prerelease (`v0.2.0-rc.1`) is published under its exact version only — it

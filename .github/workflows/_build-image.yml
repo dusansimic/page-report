@@ -13,6 +13,10 @@ on:
       version:
         required: true
         type: string
+      channel:
+        description: "'release' (semver + latest) or 'main' (moving main tag)"
+        required: true
+        type: string
       push:
         required: false
         type: boolean
@@ -108,25 +112,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Tags are derived from inputs.version, not from github.ref: on a
-      # workflow_dispatch re-release github.ref is a branch, so anything
+      # Tags come from inputs.channel + inputs.version, never from github.ref:
+      # on a workflow_dispatch re-release github.ref is a branch, so anything
       # reading the ref (docker/metadata-action's type=semver) would silently
       # produce no version tag at all.
       #
-      # `latest` only on a non-prerelease version; no bare-major tag while the
-      # project is v0.x, since "0" is not a useful compatibility promise.
+      # The channel is what decides which tags may move. Only `release` can
+      # write `latest`; `main` publishes moving/commit tags and nothing else.
       - id: tags
         env:
           VERSION: ${{ inputs.version }}
+          CHANNEL: ${{ inputs.channel }}
         run: |
           set -eu
           args="-t ${IMAGE}:sha-${{ github.sha }}"
-          case "$VERSION" in
-            v[0-9]*.[0-9]*.[0-9]*)
+          case "$CHANNEL" in
+            main)
+              # Tip of main. Deliberately no version-shaped tag: VERSION here
+              # is a `git describe` string, not a release.
+              args="$args -t ${IMAGE}:main"
+              ;;
+            release)
+              case "$VERSION" in
+                v[0-9]*.[0-9]*.[0-9]*) ;;
+                *) echo "::error::channel=release needs a vX.Y.Z version, got '$VERSION'"; exit 1 ;;
+              esac
               args="$args -t ${IMAGE}:${VERSION}"
               # A prerelease gets its exact version and nothing else: the
               # floating tags must only ever resolve to a stable release, or
-              # someone pinned to `0.1` would be handed an RC.
+              # someone pinned to `0.1` would be handed an RC. No bare-major
+              # tag while the project is v0.x, since "0" is not a useful
+              # compatibility promise.
               case "$VERSION" in
                 *-*) ;;
                 *)
@@ -135,11 +151,7 @@ jobs:
                   ;;
               esac
               ;;
-            *)
-              # Untagged build (only reachable if a caller sets push: true off
-              # a branch); identify it as edge rather than inventing a version.
-              args="$args -t ${IMAGE}:edge"
-              ;;
+            *) echo "::error::unknown channel '$CHANNEL'"; exit 1 ;;
           esac
           echo "args=$args" >> "$GITHUB_OUTPUT"
           echo "will tag:$args"
@@ -152,5 +164,6 @@ jobs:
           docker buildx imagetools create ${{ steps.tags.outputs.args }} \
             $(printf "${IMAGE}@%s " *)
 
+      # The sha tag is the one tag every channel publishes.
       - name: Inspect
-        run: docker buildx imagetools inspect "${IMAGE}:${{ inputs.version }}"
+        run: docker buildx imagetools inspect "${IMAGE}:sha-${{ github.sha }}"

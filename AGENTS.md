@@ -72,13 +72,13 @@ Two entry points over three reusable workflows. The `_`-prefixed ones are
 
 | Workflow | Trigger | Does |
 |---|---|---|
-| `ci.yml` | push `main`, every PR, dispatch | verify, then build CLI + image. No side effects: nothing is pushed or released. |
-| `release.yml` | push tag `v*`, dispatch with a tag | verify, build, then publish a GitHub Release and push the image to GHCR. Only workflow with write scopes. |
+| `ci.yml` | push `main`, every PR, dispatch | verify, then build CLI + image. On a push to `main` also pushes the image to GHCR as `main` + `sha-<sha>`. Never releases, never moves `latest`. |
+| `release.yml` | push tag `v*`, dispatch with a tag | verify, build, then publish a GitHub Release and push the image to GHCR. Only workflow with `contents: write`, and the only one that moves `latest`/`X.Y`. |
 | `_verify.yml` | reusable | `lint` + `test` jobs — the checks that used to live in `.pre-commit-config.yaml`, plus golangci-lint, actionlint and a `gen/`-drift check. |
 | `_build-cli.yml` | reusable | 4× `GOOS`/`GOARCH` matrix, uploads artifacts. |
 | `_build-image.yml` | reusable | one native runner per arch, by-digest push, merge job builds the manifest list. |
 
-Two invariants:
+Three invariants:
 
 - **Builds always `needs: verify`.** A reusable-workflow call is a single node
   in the caller's graph, so `needs: verify` means every check passed. Never let
@@ -88,6 +88,13 @@ Two invariants:
   CLI and the image reporting the same version. Image tags likewise come from
   that input, not from `github.ref`, so a `workflow_dispatch` re-release tags
   correctly.
+- **Image tags come from the `channel` input** of `_build-image.yml`, never from
+  `github.ref` or from the shape of the version string. `channel: main`
+  publishes only `main` + `sha-<sha>`; `channel: release` is the only path that
+  can write `latest`/`X.Y`, and it hard-fails on a version that is not
+  `vX.Y.Z`. Do not infer the channel from the version: a `git describe` string
+  like `v0.1.0-3-gdfe519f` matches the semver glob and would be published as a
+  literal version tag.
 
 There are deliberately no path filters: they are evaluated for tag pushes too,
 and a skipped job never reports a status, which breaks required checks.
