@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>shadcn/ui Mira Migration Plan — page-report</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { background: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { padding: 40px 20px; line-height: 1.6; }
+
+    .container { max-width: 1200px; margin: 0 auto; }
+
+    h1 { font-size: 2.5em; margin-bottom: 10px; font-weight: 600; }
+    .subtitle { color: #aaa; font-size: 1.1em; margin-bottom: 40px; }
+
+    h2 { font-size: 1.8em; margin-top: 50px; margin-bottom: 20px; font-weight: 600; border-bottom: 1px solid #222; padding-bottom: 10px; }
+    h3 { font-size: 1.2em; margin-top: 30px; margin-bottom: 15px; font-weight: 600; }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 0.85em;
+      font-weight: 600;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    .status-todo { background: #333; color: #fff; }
+    .status-in-progress { background: #7dd3fc; color: #000; }
+    .status-decision { background: #fcd34d; color: #000; }
+    .status-complete { background: #86efac; color: #000; }
+    .status-warning { background: #fb7185; color: #fff; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background: #0a0a0a;
+      border: 1px solid #222;
+    }
+    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #222; }
+    th { background: #111; font-weight: 600; font-size: 0.9em; color: #ccc; }
+    td { font-size: 0.95em; }
+
+    tr:hover { background: #0f0f0f; }
+
+    .code {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 4px;
+      padding: 12px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.9em;
+      overflow-x: auto;
+      margin: 15px 0;
+      color: #e8e8ea;
+    }
+
+    .code-inline {
+      background: #1a1a1f;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 0.9em;
+      color: #7dd3fc;
+    }
+
+    .section-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 20px 0; }
+    .card {
+      background: #0a0a0a;
+      border: 1px solid #222;
+      border-radius: 6px;
+      padding: 20px;
+    }
+    .card h3 { margin-top: 0; }
+    .card ul { margin-left: 20px; }
+    .card li { margin-bottom: 8px; }
+
+    .timeline {
+      position: relative;
+      padding-left: 30px;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #222;
+    }
+    .phase {
+      margin-bottom: 25px;
+      position: relative;
+    }
+    .phase::before {
+      content: '';
+      position: absolute;
+      left: -36px;
+      top: 2px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #7dd3fc;
+      border: 2px solid #000;
+    }
+
+    .decision-box {
+      background: #1a1a1f;
+      border-left: 3px solid #fcd34d;
+      padding: 15px;
+      margin: 15px 0;
+      border-radius: 4px;
+    }
+
+    .warning-box {
+      background: #1a0a0a;
+      border-left: 3px solid #fb7185;
+      padding: 15px;
+      margin: 15px 0;
+      border-radius: 4px;
+    }
+
+    .color-swatch {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border-radius: 3px;
+      vertical-align: middle;
+      margin-right: 8px;
+      border: 1px solid #333;
+    }
+
+    .verification-checklist {
+      background: #0a0a0a;
+      border: 1px solid #222;
+      padding: 15px;
+      border-radius: 6px;
+      margin: 15px 0;
+    }
+    .verification-checklist ul { margin-left: 20px; }
+    .verification-checklist li { margin-bottom: 10px; }
+    .checkbox { margin-right: 8px; }
+
+    .file-tree {
+      background: #0a0a0a;
+      border: 1px solid #222;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 0.9em;
+      margin: 15px 0;
+    }
+    .file-tree-item { padding: 4px 0; color: #8a8a95; }
+    .file-tree-item.file { color: #7dd3fc; }
+    .file-tree-item.dir { color: #e8e8ea; font-weight: 600; }
+    .indent { display: inline-block; width: 20px; }
+
+    .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #222; color: #666; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>shadcn/ui Mira Migration Plan</h1>
+    <p class="subtitle">page-report dashboard refactor: Custom → Mira UI components</p>
+
+    <h2>Executive Summary</h2>
+    <p>Replace 8 custom Tailwind primitives (<span class="code-inline">Button</span>, <span class="code-inline">Card</span>, <span class="code-inline">Input</span>, <span class="code-inline">Select</span>, <span class="code-inline">Badge</span>, <span class="code-inline">Table</span>, <span class="code-inline">EmptyState</span>, <span class="code-inline">Skeleton</span>) with shadcn/ui Mira components. Preserve existing color variables; align Mira's compact design (reduced border radius, dense spacing) with dashboard UX. Single-phase migration: 1–2 days development, zero breaking changes to users.</p>
+
+    <h2>Current State</h2>
+    <div class="section-grid">
+      <div class="card">
+        <h3>UI Footprint</h3>
+        <ul>
+          <li>3 screens: Landing, Dashboard, Tokens</li>
+          <li>2 tables: Pages, Tokens</li>
+          <li>~8 custom components</li>
+          <li>No external UI library</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Tech Stack</h3>
+        <ul>
+          <li>React 19.2.8</li>
+          <li>React Router 8.3.0</li>
+          <li>TypeScript 6.0.2</li>
+          <li>Vite 8.2.0</li>
+          <li>Tailwind v4.3.3</li>
+          <li>CVA (class-variance-authority)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Design System</h3>
+        <ul>
+          <li><strong>Dark theme</strong> (theme: dark)</li>
+          <li><strong>8 CSS variables</strong>: bg, panel, line, fg, muted, accent, good, warn, bad</li>
+          <li><strong>Border radius:</strong> 4–8px (md, lg)</li>
+          <li><strong>No custom tokens or scale</strong></li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>Component Inventory & Mapping</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Current Component</th>
+          <th>Mira Equivalent</th>
+          <th>Status</th>
+          <th>Breaking Changes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="code-inline">Button</span> (primary, secondary, ghost, danger)</td>
+          <td><span class="code-inline">shadcn/ui Button</span></td>
+          <td><span class="status-badge status-todo">TODO</span></td>
+          <td>None — same <span class="code-inline">variant</span> + <span class="code-inline">size</span> API</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">LinkButton</span></td>
+          <td><span class="code-inline">shadcn/ui Button asChild</span> with <span class="code-inline">&lt;a&gt;</span></td>
+          <td><span class="status-badge status-todo">TODO</span></td>
+          <td>API changes — use <span class="code-inline">asChild</span> prop</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">Card</span></td>
+          <td><span class="code-inline">shadcn/ui Card</span></td>
+          <td><span class="status-badge status-todo">TODO</span></td>
+          <td>None</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">Input</span></td>
+          <td><span class="code-inline">shadcn/ui Input</span></td>
+          <td><span class="status-badge status-todo">TODO</span></td>
+          <td>None</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">Select</span> (native)</td>
+          <td><span class="code-inline">shadcn/ui Select</span> (Radix, headless)</td>
+          <td><span class="status-badge status-decision">DECISION</span></td>
+          <td><strong>Yes.</strong> API changes — see Phase 2 decision box</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">Badge</span></td>
+          <td><span class="code-inline">shadcn/ui Badge</span></td>
+          <td><span class="status-badge status-todo">TODO</span></td>
+          <td>None — same <span class="code-inline">tone</span> prop</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">Table, Th, Td</span></td>
+          <td><span class="code-inline">shadcn/ui Table</span> (composable)</td>
+          <td><span class="status-badge status-todo">TODO</span></td>
+          <td>None</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">EmptyState</span></td>
+          <td>Custom wrapper (Card + typography)</td>
+          <td><span class="status-badge status-todo">TODO</span></td>
+          <td>None</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">Skeleton</span></td>
+          <td><span class="code-inline">shadcn/ui Skeleton</span></td>
+          <td><span class="status-badge status-todo">TODO</span></td>
+          <td>None</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Color Scheme Strategy</h2>
+    <p><strong>Goal:</strong> Keep existing dark theme; merge Mira's HSL defaults with current CSS variables.</p>
+
+    <h3>Current CSS Variables</h3>
+    <div class="code">--color-bg: #09090b;
+--color-panel: #101014;
+--color-line: #26262e;
+--color-fg: #e8e8ea;
+--color-muted: #8a8a95;
+--color-accent: #7dd3fc;
+--color-good: #86efac;
+--color-warn: #fcd34d;
+--color-bad: #fb7185;
+    </div>
+
+    <h3>Mira's HSL Defaults (Reference)</h3>
+    <p>Mira provides HSL-based tokens. We will override key shadcn defaults:</p>
+    <div class="code">/* Mira defaults (from @shadcn-ui/mira template) */
+--background: 0 0% 100%;
+--foreground: 0 0% 3.6%;
+--primary: 0 0% 9%;
+--secondary: 0 0% 96.1%;
+--muted: 0 0% 89.1%;
+--accent: 0 71.4% 68.6%; /* Mira's teal */
+--destructive: 0 84.2% 60.2%;
+--border: 0 0% 89.1%;
+--ring: 0 0% 9%;
+    </div>
+
+    <h3>Adaptation Plan</h3>
+    <div class="decision-box">
+      <strong>Decision:</strong> Create a custom Tailwind config that maps current CSS variables to shadcn/ui's expected token names. Override Mira's light defaults with dark equivalents.
+      <br><br>
+      <strong>Rationale:</strong>
+      <ul style="margin-left: 20px; margin-top: 10px;">
+        <li>Preserve visual continuity (users see no color change)</li>
+        <li>shadcn/ui Button, Badge, etc. expect <span class="code-inline">--primary</span>, <span class="code-inline">--destructive</span>, etc. to exist</li>
+        <li>Mira's Tailwind config provides a safe template to extend</li>
+      </ul>
+    </div>
+
+    <h3>New CSS Variable Map</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Current Var</th>
+          <th>Maps To (shadcn)</th>
+          <th>Value</th>
+          <th>Mira Swatch</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="code-inline">--color-bg</span></td>
+          <td><span class="code-inline">--background</span></td>
+          <td>#09090b (HSL: 240 10% 3.3%)</td>
+          <td><span class="color-swatch" style="background: #09090b;"></span></td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">--color-panel</span></td>
+          <td><span class="code-inline">--secondary</span> (card bg)</td>
+          <td>#101014 (HSL: 240 5.3% 5.9%)</td>
+          <td><span class="color-swatch" style="background: #101014;"></span></td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">--color-line</span></td>
+          <td><span class="code-inline">--border</span></td>
+          <td>#26262e (HSL: 240 4% 15.3%)</td>
+          <td><span class="color-swatch" style="background: #26262e;"></span></td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">--color-fg</span></td>
+          <td><span class="code-inline">--foreground</span></td>
+          <td>#e8e8ea (HSL: 240 3% 92%)</td>
+          <td><span class="color-swatch" style="background: #e8e8ea;"></span></td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">--color-muted</span></td>
+          <td><span class="code-inline">--muted-foreground</span></td>
+          <td>#8a8a95 (HSL: 240 3% 53%)</td>
+          <td><span class="color-swatch" style="background: #8a8a95;"></span></td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">--color-accent</span></td>
+          <td><span class="code-inline">--primary</span> (buttons, links)</td>
+          <td>#7dd3fc (HSL: 189 94% 59%)</td>
+          <td><span class="color-swatch" style="background: #7dd3fc;"></span></td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">--color-good</span></td>
+          <td><span class="code-inline">--muted</span> + custom <span class="code-inline">--success</span></td>
+          <td>#86efac (HSL: 120 72% 59%)</td>
+          <td><span class="color-swatch" style="background: #86efac;"></span></td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">--color-warn</span></td>
+          <td>Custom <span class="code-inline">--warning</span></td>
+          <td>#fcd34d (HSL: 48 96% 53%)</td>
+          <td><span class="color-swatch" style="background: #fcd34d;"></span></td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">--color-bad</span></td>
+          <td><span class="code-inline">--destructive</span></td>
+          <td>#fb7185 (HSL: 2 96% 71%)</td>
+          <td><span class="color-swatch" style="background: #fb7185;"></span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Dependencies to Add</h2>
+    <p>shadcn/ui components depend on Radix UI primitives and utilities. Install via CLI:</p>
+    <div class="code">
+npm install -D shadcn-ui@latest
+# or
+npx shadcn-ui@latest add [component]
+    </div>
+
+    <h3>Required Packages (will be auto-installed)</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Package</th>
+          <th>Purpose</th>
+          <th>Already Installed?</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="code-inline">@radix-ui/primitive</span></td>
+          <td>Radix headless primitives</td>
+          <td>No</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">@radix-ui/react-dialog</span></td>
+          <td>Dialog (Select, sheets)</td>
+          <td>No</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">@radix-ui/react-select</span></td>
+          <td>Select component</td>
+          <td>No</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">@radix-ui/react-popover</span></td>
+          <td>Popover (for Select)</td>
+          <td>No</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">cmdk</span></td>
+          <td>Command palette / search (optional)</td>
+          <td>No</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">lucide-react</span></td>
+          <td>Icons (mira includes icons in components)</td>
+          <td><strong>Yes</strong> (v1.31.0)</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">class-variance-authority</span></td>
+          <td>Variant styling (already used)</td>
+          <td><strong>Yes</strong> (v0.7.1)</td>
+        </tr>
+        <tr>
+          <td><span class="code-inline">tailwind-merge</span></td>
+          <td>Merge Tailwind classes (already used)</td>
+          <td><strong>Yes</strong> (v3.6.0)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Migration Phases</h2>
+    <div class="timeline">
+      <div class="phase">
+        <h3>Phase 1: Setup (30 min)</h3>
+        <p><strong>Goal:</strong> Create Tailwind config extension, add shadcn CLI, install base components.</p>
+        <ul>
+          <li><span class="status-badge status-todo">1.1</span> Download Mira theme from <span class="code-inline">@shadcn-ui/mira</span> (or GitHub template)</li>
+          <li><span class="status-badge status-todo">1.2</span> Extend <span class="code-inline">tailwind.config.ts</span>: override Mira's light colors with current dark variables</li>
+          <li><span class="status-badge status-todo">1.3</span> Run <span class="code-inline">npx shadcn-ui@latest init</span> with Mira preset</li>
+          <li><span class="status-badge status-todo">1.4</span> Install components: <span class="code-inline">button</span>, <span class="code-inline">card</span>, <span class="code-inline">input</span>, <span class="code-inline">select</span>, <span class="code-inline">badge</span>, <span class="code-inline">table</span>, <span class="code-inline">skeleton</span></li>
+          <li><span class="status-badge status-todo">1.5</span> Test: components render, colors match expectations</li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <h3>Phase 2: Component Migration (4–6 hours)</h3>
+        <p><strong>Goal:</strong> Replace custom components with shadcn equivalents in <span class="code-inline">src/components/ui.tsx</span>.</p>
+        <ul>
+          <li><span class="status-badge status-todo">2.1</span> Migrate <strong>Button</strong> (primary, secondary, ghost, danger variants)
+            <ul style="margin-left: 20px; margin-top: 8px;">
+              <li>Mira Button supports <span class="code-inline">variant</span> + <span class="code-inline">size</span></li>
+              <li>No changes needed to call sites</li>
+            </ul>
+          </li>
+          <li><span class="status-badge status-todo">2.2</span> Migrate <strong>LinkButton</strong>
+            <ul style="margin-left: 20px; margin-top: 8px;">
+              <li><strong>Breaking:</strong> Change from <span class="code-inline">&lt;LinkButton href="…" /&gt;</span> to <span class="code-inline">&lt;Button asChild&gt;&lt;a href="…"&gt;…&lt;/a&gt;&lt;/Button&gt;</span></li>
+              <li>Audit call sites: <span class="code-inline">src/routes</span> (likely 2–3 uses)</li>
+            </ul>
+          </li>
+          <li><span class="status-badge status-todo">2.3</span> Migrate <strong>Card</strong> (no API change)</li>
+          <li><span class="status-badge status-todo">2.4</span> Migrate <strong>Input</strong> (no API change)</li>
+          <li><span class="status-badge status-decision">2.5</span> <strong>Migrate Select</strong> — DECISION POINT
+            <div class="decision-box" style="margin-left: 20px; margin-top: 10px;">
+              <strong>Option A (Recommended):</strong> Use Radix <span class="code-inline">shadcn/ui Select</span>
+              <ul style="margin-left: 20px; margin-top: 10px;">
+                <li><strong>Pros:</strong> Fully accessible (ARIA), keyboard nav, mobile friendly, matches Mira design</li>
+                <li><strong>Cons:</strong> API is headless (Radix), requires wrapper components</li>
+                <li><strong>Impact:</strong> All <span class="code-inline">&lt;Select&gt;&lt;option&gt;</span> call sites need rewrite</li>
+                <li><strong>Effort:</strong> ~30 min (2 selects in app)</li>
+              </ul>
+              <br>
+              <strong>Option B (Lighter):</strong> Keep native <span class="code-inline">&lt;select&gt;</span>, style with Tailwind
+              <ul style="margin-left: 20px; margin-top: 10px;">
+                <li><strong>Pros:</strong> No API change, zero effort, no Radix deps</li>
+                <li><strong>Cons:</strong> Native <span class="code-inline">&lt;select&gt;</span> styling is limited; won't match Mira design as closely</li>
+              </ul>
+              <br>
+              <strong>Recommendation:</strong> Use Option A (Radix Select). Mira design scales better with proper headless controls; this is a small app.
+            </div>
+          </li>
+          <li><span class="status-badge status-todo">2.6</span> Migrate <strong>Badge</strong> (no API change)</li>
+          <li><span class="status-badge status-todo">2.7</span> Migrate <strong>Table, Th, Td</strong> — shadcn Table is composable; structure stays same</li>
+          <li><span class="status-badge status-todo">2.8</span> Migrate <strong>Skeleton</strong> (no API change)</li>
+          <li><span class="status-badge status-todo">2.9</span> Keep <strong>EmptyState</strong> as custom wrapper (not in shadcn); update to use shadcn Card internally</li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <h3>Phase 3: Call-Site Updates (1–2 hours)</h3>
+        <p><strong>Goal:</strong> Update imports and broken APIs in <span class="code-inline">src/routes</span>, <span class="code-inline">src/components</span>.</p>
+        <ul>
+          <li><span class="status-badge status-todo">3.1</span> Update all imports: <span class="code-inline">from "@/components/ui"</span> → stay same (re-export shadcn from ui.tsx)</li>
+          <li><span class="status-badge status-todo">3.2</span> Fix <strong>LinkButton</strong> call sites (estimated 2–3 places)</li>
+          <li><span class="status-badge status-todo">3.3</span> Fix <strong>Select</strong> call sites (estimated 2 places: Tokens screen, filters)</li>
+          <li><span class="status-badge status-todo">3.4</span> Run TypeScript check: <span class="code-inline">pnpm typecheck</span></li>
+          <li><span class="status-badge status-todo">3.5</span> Run lint: <span class="code-inline">pnpm lint</span></li>
+        </ul>
+      </div>
+
+      <div class="phase">
+        <h3>Phase 4: QA & Polish (1 hour)</h3>
+        <p><strong>Goal:</strong> Verify visual consistency, test accessibility, confirm Mira design intent.</p>
+        <ul>
+          <li><span class="status-badge status-todo">4.1</span> Visual regression: take screenshots of all 3 screens, compare to baseline</li>
+          <li><span class="status-badge status-todo">4.2</span> Test Button variants (primary, secondary, ghost, danger, disabled)</li>
+          <li><span class="status-badge status-todo">4.3</span> Test Badge tones (muted, good, warn, bad)</li>
+          <li><span class="status-badge status-todo">4.4</span> Test Select keyboard nav (arrow keys, Enter, Escape)</li>
+          <li><span class="status-badge status-todo">4.5</span> Test Table sorting/pagination (if applicable)</li>
+          <li><span class="status-badge status-todo">4.6</span> Verify dark theme in browser dev tools</li>
+          <li><span class="status-badge status-todo">4.7</span> Run production build: <span class="code-inline">pnpm build</span> and test dist</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>File Structure & Locations</h2>
+    <div class="file-tree">
+      <div class="file-tree-item dir">web/app/</div>
+      <div class="file-tree-item"><span class="indent"></span><span class="file-tree-item file">src/components/ui.tsx</span> — <strong>[REWRITE]</strong> Replace custom components with shadcn exports</div>
+      <div class="file-tree-item"><span class="indent"></span><span class="file-tree-item dir">src/components/ui/</span> — <strong>[CREATE]</strong> Auto-generated shadcn components (button.tsx, card.tsx, etc.)</div>
+      <div class="file-tree-item"><span class="indent"></span><span class="file-tree-item file">src/index.css</span> — <strong>[UPDATE]</strong> Merge CSS vars; add Mira overrides</div>
+      <div class="file-tree-item"><span class="indent"></span><span class="file-tree-item file">tailwind.config.ts</span> — <strong>[CREATE or UPDATE]</strong> Extend Mira preset with dark overrides</div>
+      <div class="file-tree-item"><span class="indent"></span><span class="file-tree-item file">vite.config.ts</span> — No changes (Tailwind v4 plugin already in place)</div>
+      <div class="file-tree-item"><span class="indent"></span><span class="file-tree-item dir">src/routes/</span> — <strong>[UPDATE]</strong> Fix LinkButton and Select call sites</div>
+      <div class="file-tree-item"><span class="indent"></span><span class="file-tree-item dir">src/lib/</span> — No changes (utils.ts already has <span class="code-inline">cn</span>)</div>
+    </div>
+
+    <h2>CSS Color Override (Key Detail)</h2>
+    <p>Create or update <span class="code-inline">tailwind.config.ts</span> to extend the Mira theme with dark variables:</p>
+    <div class="code">import type { Config } from "tailwindcss";
+import defaultTheme from "tailwindcss/defaultTheme";
+
+export default {
+  darkMode: ["class"],
+  content: ["./index.html", "./src/**/*.tsx"],
+  theme: {
+    extend: {
+      colors: {
+        bg: "var(--color-bg)",
+        panel: "var(--color-panel)",
+        line: "var(--color-line)",
+        fg: "var(--color-fg)",
+        muted: "var(--color-muted)",
+        accent: "var(--color-accent)",
+        good: "var(--color-good)",
+        warn: "var(--color-warn)",
+        bad: "var(--color-bad)",
+      },
+    },
+  },
+  plugins: [],
+} satisfies Config;
+    </div>
+
+    <p><strong>Also update <span class="code-inline">src/index.css</span> to map shadcn expectations:</strong></p>
+    <div class="code">@theme {
+  /* Mira/shadcn standard tokens (map to current vars) */
+  --background: var(--color-bg);        /* #09090b */
+  --foreground: var(--color-fg);        /* #e8e8ea */
+  --secondary: var(--color-panel);      /* #101014 */
+  --border: var(--color-line);          /* #26262e */
+  --muted-foreground: var(--color-muted); /* #8a8a95 */
+  --primary: var(--color-accent);       /* #7dd3fc */
+  --destructive: var(--color-bad);      /* #fb7185 */
+
+  /* Custom tokens for status/semantics */
+  --success: var(--color-good);         /* #86efac */
+  --warning: var(--color-warn);         /* #fcd34d */
+
+  /* Original custom vars (backward compat) */
+  --color-bg: #09090b;
+  --color-panel: #101014;
+  --color-line: #26262e;
+  --color-fg: #e8e8ea;
+  --color-muted: #8a8a95;
+  --color-accent: #7dd3fc;
+  --color-good: #86efac;
+  --color-warn: #fcd34d;
+  --color-bad: #fb7185;
+}
+    </div>
+
+    <h2>Verification Checklist</h2>
+    <div class="verification-checklist">
+      <h3>Phase 1 Verification</h3>
+      <ul>
+        <li><input type="checkbox" class="checkbox"> shadcn CLI initialized (<span class="code-inline">components.json</span> exists)</li>
+        <li><input type="checkbox" class="checkbox"> Mira preset applied (components render with compact borders/spacing)</li>
+        <li><input type="checkbox" class="checkbox"> All 7 components installed: <span class="code-inline">button</span>, <span class="code-inline">card</span>, <span class="code-inline">input</span>, <span class="code-inline">select</span>, <span class="code-inline">badge</span>, <span class="code-inline">table</span>, <span class="code-inline">skeleton</span></li>
+        <li><input type="checkbox" class="checkbox"> No build errors after init</li>
+      </ul>
+
+      <h3>Phase 2 Verification</h3>
+      <ul>
+        <li><input type="checkbox" class="checkbox"> All custom components removed from <span class="code-inline">ui.tsx</span></li>
+        <li><input type="checkbox" class="checkbox"> All shadcn components re-exported from <span class="code-inline">ui.tsx</span></li>
+        <li><input type="checkbox" class="checkbox"> <span class="code-inline">pnpm typecheck</span> passes (no errors)</li>
+        <li><input type="checkbox" class="checkbox"> Colors match: bg, panel, accent, badges render with expected hues</li>
+      </ul>
+
+      <h3>Phase 3 Verification</h3>
+      <ul>
+        <li><input type="checkbox" class="checkbox"> All <span class="code-inline">LinkButton</span> replaced with <span class="code-inline">Button asChild</span></li>
+        <li><input type="checkbox" class="checkbox"> All native <span class="code-inline">&lt;select&gt;</span> replaced with <span class="code-inline">Select</span> (Radix)</li>
+        <li><input type="checkbox" class="checkbox"> <span class="code-inline">pnpm lint</span> passes</li>
+        <li><input type="checkbox" class="checkbox"> No unused imports</li>
+      </ul>
+
+      <h3>Phase 4 Verification</h3>
+      <ul>
+        <li><input type="checkbox" class="checkbox"> Landing page: buttons, links render; colors correct</li>
+        <li><input type="checkbox" class="checkbox"> Dashboard page: table, badges, skeleton (if any) render correctly</li>
+        <li><input type="checkbox" class="checkbox"> Tokens page: table, selects, buttons work; selects are keyboard accessible</li>
+        <li><input type="checkbox" class="checkbox"> Dark theme active (<span class="code-inline">html.dark</span> class or <span class="code-inline">prefers-color-scheme: dark</span>)</li>
+        <li><input type="checkbox" class="checkbox"> Border radius: Mira compact style (4px vs. 8px) visually consistent</li>
+        <li><input type="checkbox" class="checkbox"> No visual regressions vs. baseline screenshots</li>
+        <li><input type="checkbox" class="checkbox"> <span class="code-inline">pnpm build</span> succeeds; dist compresses as expected</li>
+      </ul>
+    </div>
+
+    <h2>Risk & Mitigation</h2>
+    <div class="section-grid">
+      <div class="card" style="border-left: 3px solid #fb7185;">
+        <h3 style="margin-top: 0;">Risk: Select API Breakage</h3>
+        <p><strong>Issue:</strong> Native <span class="code-inline">&lt;select&gt;</span> → Radix <span class="code-inline">Select</span> is a large API change (headless wrapper).</p>
+        <p><strong>Mitigation:</strong></p>
+        <ul>
+          <li>Only 2–3 select call sites in the app (small blast radius)</li>
+          <li>Radix Select is well-documented; shadcn examples are abundant</li>
+          <li>Consider keeping native select as fallback if time-constrained</li>
+        </ul>
+      </div>
+
+      <div class="card" style="border-left: 3px solid #7dd3fc;">
+        <h3 style="margin-top: 0;">Risk: Color Drift</h3>
+        <p><strong>Issue:</strong> Mira's defaults might override custom vars; CSS specificity issues.</p>
+        <p><strong>Mitigation:</strong></p>
+        <ul>
+          <li>Map all shadcn token names to existing vars (above)</li>
+          <li>Test colors in browser DevTools after Phase 1</li>
+          <li>If colors drift, adjust <span class="code-inline">tailwind.config.ts</span> <span class="code-inline">theme.extend</span></li>
+        </ul>
+      </div>
+
+      <div class="card" style="border-left: 3px solid #fcd34d;">
+        <h3 style="margin-top: 0;">Risk: Dependencies Conflict</h3>
+        <p><strong>Issue:</strong> Radix UI might conflict with existing React versions or other deps.</p>
+        <p><strong>Mitigation:</strong></p>
+        <ul>
+          <li>React 19.2.8 is cutting edge but stable; Radix supports it</li>
+          <li>shadcn/ui is tested with React 18+</li>
+          <li>Install and run <span class="code-inline">pnpm install</span> first; resolve any peer warnings</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>Build & Deployment Notes</h2>
+    <ul>
+      <li><strong>Bundle impact:</strong> shadcn/ui + Radix adds ~30–50 KB gzipped (typical for Button + Select + Table). Current app is small, so acceptable.</li>
+      <li><strong>Tree-shaking:</strong> Only imported components are bundled. Unused shadcn components do not bloat the build.</li>
+      <li><strong>Generated files:</strong> shadcn components are generated into <span class="code-inline">src/components/ui/</span>; commit them to git.</li>
+      <li><strong>Vite:</strong> No vite config changes needed. Tailwind v4 plugin already handles CSS.</li>
+      <li><strong>SSR/Edge:</strong> Not applicable (SPA only). shadcn/ui is fully client-side.</li>
+    </ul>
+
+    <h2>Timeline & Effort Summary</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Phase</th>
+          <th>Estimated Time</th>
+          <th>Blockers</th>
+          <th>Owner</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Phase 1: Setup</td>
+          <td>30 min</td>
+          <td>None</td>
+          <td>Agent</td>
+        </tr>
+        <tr>
+          <td>Phase 2: Component Migration</td>
+          <td>4–6 hours</td>
+          <td>Select API decision</td>
+          <td>Agent</td>
+        </tr>
+        <tr>
+          <td>Phase 3: Call-Site Updates</td>
+          <td>1–2 hours</td>
+          <td>LinkButton/Select rewrites</td>
+          <td>Agent</td>
+        </tr>
+        <tr>
+          <td>Phase 4: QA & Polish</td>
+          <td>1 hour</td>
+          <td>None</td>
+          <td>Manual review</td>
+        </tr>
+        <tr>
+          <td style="font-weight: 600;">Total</td>
+          <td style="font-weight: 600;">6.5–9.5 hours</td>
+          <td></td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Success Criteria</h2>
+    <ul>
+      <li><strong>Visual fidelity:</strong> All screens render identically to baseline (no user-visible color/spacing changes)</li>
+      <li><strong>Type safety:</strong> <span class="code-inline">pnpm typecheck</span> passes with zero errors</li>
+      <li><strong>Lint clean:</strong> <span class="code-inline">pnpm lint</span> reports no violations</li>
+      <li><strong>Build success:</strong> <span class="code-inline">pnpm build</span> completes; <span class="code-inline">dist/</span> embeds into Go server without errors</li>
+      <li><strong>No regressions:</strong> All 3 screens (Landing, Dashboard, Tokens) function as before; tables, selects, forms work</li>
+      <li><strong>Design alignment:</strong> Components reflect Mira's compact aesthetic (smaller border radius, tighter spacing)</li>
+    </ul>
+
+    <div class="footer">
+      <p><strong>Plan Version:</strong> 1.0 | <strong>Generated:</strong> 2026-08-25 | <strong>Status:</strong> Ready for agent execution</p>
+    </div>
+  </div>
+</body>
+</html>

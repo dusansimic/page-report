@@ -1,7 +1,7 @@
 import { Navigate, Outlet } from "react-router";
 
 import { useSession, isSignedIn } from "@/hooks/session";
-import { Skeleton } from "@/components/ui";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /** Gate for the signed-in routes. The server enforces this too; this only
  * keeps the user from staring at an empty table while every call 401s. */
