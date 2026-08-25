@@ -78,7 +78,7 @@ Two entry points over three reusable workflows. The `_`-prefixed ones are
 | `_build-cli.yml` | reusable | 4× `GOOS`/`GOARCH` matrix, uploads artifacts. |
 | `_build-image.yml` | reusable | one native runner per arch, by-digest push, merge job builds the manifest list. |
 
-Three invariants:
+Four invariants:
 
 - **Builds always `needs: verify`.** A reusable-workflow call is a single node
   in the caller's graph, so `needs: verify` means every check passed. Never let
@@ -95,6 +95,11 @@ Three invariants:
   `vX.Y.Z`. Do not infer the channel from the version: a `git describe` string
   like `v0.1.0-3-gdfe519f` matches the semver glob and would be published as a
   literal version tag.
+- **Digests never appear in artifact paths.** `upload-artifact` rejects `:` in a
+  path, so `sha256:<hex>` cannot be a filename. In `_build-image.yml` the digest
+  travels in the file's *contents*, named by arch slug; the export step and the
+  merge job's `imagetools create` are two halves of that one encoding and change
+  together.
 
 There are deliberately no path filters: they are evaluated for tag pushes too,
 and a skipped job never reports a status, which breaks required checks.
