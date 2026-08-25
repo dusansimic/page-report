@@ -71,6 +71,7 @@ jobs:
       packages: write
     with:
       version: ${{ needs.meta.outputs.version }}
+      channel: release
       push: true
 
   github-release:

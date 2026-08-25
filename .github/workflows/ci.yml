@@ -1,5 +1,7 @@
-# Every commit: verify, then build both artifacts. No side effects outside the
-# run — no registry push, no release, no contents: write.
+# Every commit: verify, then build both artifacts. On a push to main the image
+# is also published to GHCR as `main` + `sha-<sha>`; PRs and dispatch builds
+# stay on the runner. Releases, version tags and `latest` remain release.yml's
+# job, and nothing here ever needs contents: write.
 #
 # There are deliberately no path filters. They would be evaluated for tag
 # pushes too (where there is no meaningful diff), and a skipped job never
@@ -53,4 +55,5 @@ jobs:
       packages: write
     with:
       version: ${{ needs.meta.outputs.version }}
-      push: false
+      channel: main
+      push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
