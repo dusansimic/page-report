@@ -6,28 +6,62 @@ import { toast } from "sonner";
 import { dashboardClient, sessionQueryKey, useSession } from "@/hooks/session";
 import { errorMessage, isReauthRequired, login } from "@/lib/transport";
 import { absolute, relative } from "@/lib/format";
-import { Modal } from "@/components/Modal";
 import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Input,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
   Select,
-  Skeleton,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
   Table,
-  Td,
-  Th,
-} from "@/components/ui";
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const tokensKey = ["tokens"] as const;
 const HOUR = 3600;
 
-const EXPIRY_CHOICES: { label: string; seconds: number }[] = [
-  { label: "Never", seconds: 0 },
-  { label: "30 days", seconds: 30 * 24 * HOUR },
-  { label: "90 days", seconds: 90 * 24 * HOUR },
-  { label: "1 year", seconds: 365 * 24 * HOUR },
+const EXPIRY_CHOICES: { label: string; value: number }[] = [
+  { label: "Never", value: 0 },
+  { label: "30 days", value: 30 * 24 * HOUR },
+  { label: "90 days", value: 90 * 24 * HOUR },
+  { label: "1 year", value: 365 * 24 * HOUR },
 ];
 
 export function Tokens() {
@@ -103,100 +137,106 @@ export function Tokens() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">CLI tokens</h1>
-          <p className="mt-1 text-sm text-muted">
-            Used by <code className="text-accent">page-report login</code>. A
+          <h1 className="font-heading text-xl font-semibold tracking-tight">
+            CLI tokens
+          </h1>
+          <p className="mt-1 text-xs/relaxed text-muted-foreground">
+            Used by <code className="text-primary">page-report login</code>. A
             token is shown once, when it is created.
           </p>
         </div>
         <Button onClick={() => setCreating(true)}>
-          <Plus className="size-4" />
+          <Plus />
           New token
         </Button>
       </div>
 
-      <Card>
+      <Card className="py-0">
         {isPending ? (
           <div className="space-y-2 p-4">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-7 w-full" />
+            <Skeleton className="h-7 w-full" />
           </div>
         ) : error ? (
-          <EmptyState title="Could not load tokens">
-            {errorMessage(error)}
-          </EmptyState>
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>Could not load tokens</EmptyTitle>
+              <EmptyDescription>{errorMessage(error)}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : tokens.length === 0 ? (
-          <EmptyState title="No tokens yet">
-            Create one, then run{" "}
-            <code className="text-accent">page-report login</code> and paste it
-            in.
-          </EmptyState>
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>No tokens yet</EmptyTitle>
+              <EmptyDescription>
+                Create one, then run{" "}
+                <code className="text-primary">page-report login</code> and
+                paste it in.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : (
           <Table>
-            <thead>
-              <tr>
-                <Th>Name</Th>
-                <Th>Token</Th>
-                <Th>Created</Th>
-                <Th>Last used</Th>
-                <Th>Expires</Th>
-                <Th className="text-right">Actions</Th>
-              </tr>
-            </thead>
-            <tbody>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Token</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead>Last used</TableHead>
+                <TableHead>Expires</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {tokens.map((t) => (
-                <tr key={t.id} className="last:[&>td]:border-0">
-                  <Td className="font-medium">
+                <TableRow key={t.id}>
+                  <TableCell className="font-medium">
                     {t.name}
                     {t.revoked && (
                       <span className="ml-2">
-                        <Badge tone="bad">revoked</Badge>
+                        <Badge variant="destructive">revoked</Badge>
                       </span>
                     )}
-                  </Td>
-                  <Td>
-                    <code className="text-xs text-muted">
+                  </TableCell>
+                  <TableCell>
+                    <code className="text-[0.625rem] text-muted-foreground">
                       {t.displayPrefix}…
                     </code>
-                  </Td>
-                  <Td className="whitespace-nowrap text-muted">
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
                     <span title={absolute(t.createdAt)}>
                       {relative(t.createdAt)}
                     </span>
-                  </Td>
-                  <Td className="whitespace-nowrap text-muted">
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
                     {relative(t.lastUsedAt, "never")}
-                  </Td>
-                  <Td className="whitespace-nowrap text-muted">
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
                     {absolute(t.expiresAt, "never")}
-                  </Td>
-                  <Td>
+                  </TableCell>
+                  <TableCell>
                     <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
+                      <IconAction
+                        label="Rotate: issue a new secret, invalidating the old one"
                         disabled={rotate.isPending}
                         onClick={() => rotate.mutate(t.id)}
-                        title="Rotate: issue a new secret, invalidating the old one"
                       >
-                        <RefreshCw className="size-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="hover:text-bad"
+                        <RefreshCw />
+                      </IconAction>
+                      <IconAction
+                        label="Delete token"
+                        className="hover:text-destructive"
                         onClick={() =>
                           setPendingDelete({ id: t.id, name: t.name })
                         }
-                        title="Delete token"
                       >
-                        <Trash2 className="size-4" />
-                      </Button>
+                        <Trash2 />
+                      </IconAction>
                     </div>
-                  </Td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
+            </TableBody>
           </Table>
         )}
       </Card>
@@ -213,29 +253,68 @@ export function Tokens() {
 
       <RevealTokenDialog token={revealed} onClose={() => setRevealed(null)} />
 
-      <Modal
+      <AlertDialog
         open={pendingDelete !== null}
-        onClose={() => setPendingDelete(null)}
-        title="Delete token"
+        onOpenChange={(open) => !open && setPendingDelete(null)}
       >
-        <p className="text-sm text-muted">
-          Delete <span className="text-fg">{pendingDelete?.name}</span>? Any
-          machine using it stops being able to reach the API immediately.
-        </p>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setPendingDelete(null)}>
-            Cancel
-          </Button>
-          <Button
-            variant="danger"
-            disabled={del.isPending}
-            onClick={() => pendingDelete && del.mutate(pendingDelete.id)}
-          >
-            Delete
-          </Button>
-        </div>
-      </Modal>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete token</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete{" "}
+              <span className="text-foreground">{pendingDelete?.name}</span>?
+              Any machine using it stops being able to reach the API
+              immediately.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={del.isPending}
+              onClick={() => pendingDelete && del.mutate(pendingDelete.id)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+  );
+}
+
+/** An icon-only button plus the tooltip that says what it does. */
+function IconAction({
+  label,
+  onClick,
+  disabled,
+  className,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={className}
+            disabled={disabled}
+            onClick={onClick}
+            aria-label={label}
+          />
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -253,62 +332,68 @@ function CreateTokenDialog({
   onSubmit: (name: string, expiresInSeconds: number) => void;
 }) {
   const [name, setName] = useState("");
-  const [expiry, setExpiry] = useState(String(defaultExpiry));
+  const [expiry, setExpiry] = useState(defaultExpiry);
 
   return (
-    <Modal open={open} onClose={onClose} title="New CLI token">
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSubmit(name.trim(), Number(expiry));
-        }}
-        className="space-y-4"
-      >
-        <div className="space-y-1.5">
-          <label htmlFor="token-name" className="text-sm">
-            Name
-          </label>
-          <Input
-            id="token-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="laptop"
-            maxLength={64}
-            autoFocus
-            required
-          />
-          <p className="text-xs text-muted">
-            A label so you can tell your tokens apart later.
-          </p>
-        </div>
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New CLI token</DialogTitle>
+        </DialogHeader>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit(name.trim(), expiry);
+          }}
+          className="space-y-4"
+        >
+          <Field>
+            <FieldLabel htmlFor="token-name">Name</FieldLabel>
+            <Input
+              id="token-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="laptop"
+              maxLength={64}
+              autoFocus
+              required
+            />
+            <FieldDescription>
+              A label so you can tell your tokens apart later.
+            </FieldDescription>
+          </Field>
 
-        <div className="space-y-1.5">
-          <label htmlFor="token-expiry" className="text-sm">
-            Expires
-          </label>
-          <Select
-            id="token-expiry"
-            value={expiry}
-            onChange={(e) => setExpiry(e.target.value)}
-          >
-            {EXPIRY_CHOICES.map((c) => (
-              <option key={c.seconds} value={c.seconds}>
-                {c.label}
-              </option>
-            ))}
-          </Select>
-        </div>
+          <Field>
+            <FieldLabel htmlFor="token-expiry">Expires</FieldLabel>
+            <Select
+              items={EXPIRY_CHOICES}
+              value={expiry}
+              onValueChange={(next) => setExpiry(Number(next))}
+            >
+              <SelectTrigger id="token-expiry" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPIRY_CHOICES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
 
-        <div className="flex justify-end gap-2 pt-1">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={pending || name.trim() === ""}>
-            Create token
-          </Button>
-        </div>
-      </form>
-    </Modal>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending || name.trim() === ""}>
+              Create token
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -320,34 +405,45 @@ function RevealTokenDialog({
   onClose: () => void;
 }) {
   return (
-    <Modal open={token !== null} onClose={onClose} title="Copy your token now">
-      <p className="text-sm text-muted">
-        Only a hash of this token is stored, so this is the one and only time it
-        can be shown. If you lose it, rotate the token to get a new one.
-      </p>
-      <div className="mt-4 flex items-center gap-2">
-        <code className="flex-1 overflow-x-auto rounded-md border border-line bg-bg px-3 py-2 text-xs">
-          {token}
-        </code>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            if (token) navigator.clipboard.writeText(token);
-            toast.success("Token copied");
-          }}
-        >
-          <Copy className="size-4" />
-          Copy
-        </Button>
-      </div>
-      <p className="mt-4 text-sm text-muted">
-        On the machine that needs it, run{" "}
-        <code className="text-accent">page-report login</code> and paste it at
-        the prompt.
-      </p>
-      <div className="mt-5 flex justify-end">
-        <Button onClick={onClose}>Done</Button>
-      </div>
-    </Modal>
+    <Dialog open={token !== null} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Copy your token now</DialogTitle>
+          <DialogDescription>
+            Only a hash of this token is stored, so this is the one and only
+            time it can be shown. If you lose it, rotate the token to get a new
+            one.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* min-w-0 on both: without it the flex item refuses to shrink below
+            the token's intrinsic width and the dialog overflows. */}
+        <div className="flex min-w-0 items-center gap-2">
+          <code className="min-w-0 flex-1 overflow-x-auto rounded-md border border-input bg-input/20 px-2 py-1.5 text-[0.625rem] whitespace-nowrap">
+            {token}
+          </code>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (token) navigator.clipboard.writeText(token);
+              toast.success("Token copied");
+            }}
+          >
+            <Copy />
+            Copy
+          </Button>
+        </div>
+
+        <p className="text-xs/relaxed text-muted-foreground">
+          On the machine that needs it, run{" "}
+          <code className="text-primary">page-report login</code> and paste it
+          at the prompt.
+        </p>
+
+        <DialogFooter>
+          <DialogClose render={<Button />}>Done</DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

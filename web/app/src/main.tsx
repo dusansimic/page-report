@@ -3,7 +3,8 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TransportProvider } from "@connectrpc/connect-query";
-import { Toaster } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { transport } from "@/lib/transport";
 import { App } from "@/App";
@@ -24,10 +25,12 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <TransportProvider transport={transport}>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-        <Toaster theme="dark" position="bottom-right" richColors />
+        <TooltipProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </TooltipProvider>
+        <Toaster position="bottom-right" richColors />
       </QueryClientProvider>
     </TransportProvider>
   </StrictMode>,

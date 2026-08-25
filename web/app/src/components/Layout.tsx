@@ -2,6 +2,7 @@ import { NavLink, Outlet, Link } from "react-router";
 import { FileText, KeyRound } from "lucide-react";
 
 import { useSession, isSignedIn } from "@/hooks/session";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const REPO_URL = "https://github.com/dusansimic/page-report";
@@ -12,24 +13,24 @@ export function Layout() {
 
   return (
     <div className="min-h-dvh">
-      <header className="border-b border-line">
+      <header className="border-b">
         <div className="mx-auto flex max-w-5xl items-center gap-6 px-6 py-3">
-          <Link to="/" className="font-semibold tracking-tight">
+          <Link to="/" className="font-heading text-sm font-semibold tracking-tight">
             page-report
           </Link>
 
           {signedIn && (
-            <nav className="flex items-center gap-1 text-sm">
-              <NavItem to="/dashboard" icon={<FileText className="size-4" />}>
+            <nav className="flex items-center gap-1">
+              <NavItem to="/dashboard" icon={<FileText />}>
                 Reports
               </NavItem>
-              <NavItem to="/tokens" icon={<KeyRound className="size-4" />}>
+              <NavItem to="/tokens" icon={<KeyRound />}>
                 Tokens
               </NavItem>
             </nav>
           )}
 
-          <div className="ml-auto flex items-center gap-3 text-sm">
+          <div className="ml-auto flex items-center gap-3 text-xs/relaxed">
             {signedIn && <Account session={session!} />}
           </div>
         </div>
@@ -39,8 +40,8 @@ export function Layout() {
         <Outlet />
       </main>
 
-      <footer className="mx-auto max-w-5xl px-6 pb-10 text-xs text-muted">
-        <a href={REPO_URL} className="hover:text-fg">
+      <footer className="mx-auto max-w-5xl px-6 pb-10 text-[0.625rem] text-muted-foreground">
+        <a href={REPO_URL} className="hover:text-foreground">
           Source on GitHub
         </a>
       </footer>
@@ -62,8 +63,10 @@ function NavItem({
       to={to}
       className={({ isActive }) =>
         cn(
-          "flex items-center gap-2 rounded-md px-3 py-1.5 transition-colors",
-          isActive ? "bg-panel text-fg" : "text-muted hover:text-fg",
+          buttonVariants({ variant: "ghost", size: "sm" }),
+          isActive
+            ? "bg-muted text-foreground"
+            : "text-muted-foreground",
         )
       }
     >
@@ -85,12 +88,12 @@ function Account({
         <img
           src={session.avatarUrl}
           alt=""
-          width={24}
-          height={24}
+          width={22}
+          height={22}
           className="rounded-full"
         />
       )}
-      <span className="text-muted">{name}</span>
+      <span className="text-muted-foreground">{name}</span>
       {/*
         A real form post, not a fetch: signing out clears a cookie and should
         leave the app in a freshly loaded state rather than a stale cache.
@@ -99,7 +102,7 @@ function Account({
         <input type="hidden" name="next" value="/" />
         <button
           type="submit"
-          className="cursor-pointer text-muted hover:text-fg"
+          className="cursor-pointer text-muted-foreground hover:text-foreground"
         >
           Sign out
         </button>

@@ -1,7 +1,9 @@
 import { Navigate } from "react-router";
 
 import { useSession, isSignedIn } from "@/hooks/session";
-import { Card, LinkButton, Skeleton } from "@/components/ui";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const REPO_URL = "https://github.com/dusansimic/page-report";
 
@@ -34,16 +36,18 @@ export function Landing() {
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div className="space-y-4">
-        <h1 className="text-3xl font-semibold tracking-tight">page-report</h1>
-        <p className="text-lg leading-relaxed text-muted">
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">
+          page-report
+        </h1>
+        <p className="text-sm leading-relaxed text-muted-foreground">
           A self-hosted place to publish single-page HTML reports and plans.
           Upload one from the command line and share the link &mdash; every
           report is served sandboxed and behind a login.
         </p>
-        <p className="leading-relaxed text-muted">
+        <p className="text-xs/relaxed leading-relaxed text-muted-foreground">
           The project is open source and free to steal: take it, fork it, run
           your own.{" "}
-          <a href={REPO_URL} className="text-accent hover:underline">
+          <a href={REPO_URL} className="text-primary hover:underline">
             {REPO_URL.replace("https://", "")}
           </a>
         </p>
@@ -54,24 +58,28 @@ export function Landing() {
         between here and the dashboard forever, so say what happened instead.
       */}
       {session?.authenticated && !session.allowed && (
-        <Card className="border-warn/40 p-4 text-sm">
-          <p className="font-medium text-warn">Account not allowed</p>
-          <p className="mt-1 text-muted">
+        <Alert className="ring-1 ring-warning/40">
+          <AlertTitle className="text-warning">Account not allowed</AlertTitle>
+          <AlertDescription>
             You are signed in{session.email ? ` as ${session.email}` : ""}, but
             this account is not on the server&apos;s allowlist. Ask the operator
             to add it, then sign in again.
-          </p>
-        </Card>
+          </AlertDescription>
+        </Alert>
       )}
 
-      <div className="border-t border-line pt-8">
-        <LinkButton
-          href={`${session?.loginUrl ?? "/auth/login"}?next=%2Fdashboard`}
+      <div className="border-t pt-8">
+        <Button
           size="lg"
+          render={
+            <a
+              href={`${session?.loginUrl ?? "/auth/login"}?next=%2Fdashboard`}
+            />
+          }
         >
-          <GithubMark className="size-5" />
+          <GithubMark className="size-4" />
           Sign in with GitHub
-        </LinkButton>
+        </Button>
       </div>
     </div>
   );

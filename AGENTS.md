@@ -133,6 +133,35 @@ copying `publicDir` back in is what restores it — without the second copy, one
 Generated TypeScript in `web/app/src/gen` is buf output — never hand-edit, and
 keep it excluded from lint and formatting hooks the way `gen/` is.
 
+### shadcn/ui
+
+The UI is shadcn/ui in the **`base-mira`** style: Base UI primitives
+(`@base-ui/react`), Mira preset (compact — small controls, `text-xs` bodies,
+`h-7` buttons), zinc base colour, lucide icons. `web/app/components.json` is the
+config; `pnpm dlx shadcn@latest add <name>` puts new components in
+`web/app/src/components/ui/`.
+
+- Unlike `src/gen`, `src/components/ui/` is **owned code**: editable, linted,
+  committed. It is where a component's styling is changed — not per-call-site
+  overrides.
+- Base UI composes with a **`render` prop**, not Radix's `asChild`
+  (`<Button render={<a href="…" />}>`). Check `shadcn docs <name> --base base`
+  before writing a call site from memory.
+- The app is **dark only**: `web/app/index.html` carries `class="dark"` and
+  there is no theme switcher. `src/components/ui/sonner.tsx` is edited to pin
+  `theme="dark"` instead of pulling in `next-themes`.
+- Two tokens deviate from the zinc defaults, both in `src/index.css`:
+  `--primary` is sky (`#7dd3fc`, the product's one brand colour), and
+  `--success`/`--warning` are project additions mapped through `@theme inline`
+  because shadcn has no token for either.
+- `spaCSP` is `font-src 'self'`, so **no CDN fonts**. Inter arrives through the
+  `@fontsource-variable/inter` npm package and is bundled into `dist/assets`,
+  which is same-origin. A bare `@import url(https://fonts.…)` from a style
+  preset would be blocked at runtime with no error in the build.
+- Do not render report HTML through any of these components either — the rule
+  in "Report isolation" covers `HoverCard`, `Dialog` previews and thumbnails
+  just as much as `iframe`.
+
 ## Report isolation (do not weaken these)
 
 Report HTML is attacker-controlled and shares its origin with the dashboard,
