@@ -76,11 +76,21 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.slug }}
           outputs: ${{ inputs.push && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.IMAGE) || 'type=cacheonly' }}
 
+      # The digest is the file's *content*, not its name: upload-artifact
+      # rejects ':' in a path, and a digest is `sha256:<hex>`.
       - name: Export digest
         if: inputs.push
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          SLUG: ${{ matrix.slug }}
         run: |
+          set -eu
+          case "$DIGEST" in
+            sha256:*) ;;
+            *) echo "::error::unexpected digest '$DIGEST'"; exit 1 ;;
+          esac
           mkdir -p /tmp/digests
-          touch "/tmp/digests/${{ steps.build.outputs.digest }}"
+          printf '%s\n' "$DIGEST" > "/tmp/digests/$SLUG"
 
       - uses: actions/upload-artifact@v7
         if: inputs.push
@@ -160,9 +170,20 @@ jobs:
         working-directory: /tmp/digests
         run: |
           set -eu
-          # shellcheck disable=SC2046,SC2086  # word splitting is the point here
-          docker buildx imagetools create ${{ steps.tags.outputs.args }} \
-            $(printf "${IMAGE}@%s " *)
+          refs=""
+          for f in *; do
+            # An unmatched glob iterates the literal '*': without this the
+            # tags below would land on a manifest built from no inputs.
+            [ -f "$f" ] || { echo "::error::no digest files were downloaded"; exit 1; }
+            d="$(cat "$f")"
+            case "$d" in
+              sha256:*) ;;
+              *) echo "::error::$f holds '$d', not a digest"; exit 1 ;;
+            esac
+            refs="$refs ${IMAGE}@$d"
+          done
+          # shellcheck disable=SC2086  # word splitting is the point here
+          docker buildx imagetools create ${{ steps.tags.outputs.args }} $refs
 
       # The sha tag is the one tag every channel publishes.
       - name: Inspect
