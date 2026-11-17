@@ -56,6 +56,20 @@ message PageMeta {
   string created_by = 6;
   // Full URL where the page is served.
   string url = 7;
+  // Agent session the page was uploaded from. Unset when none was detected.
+  Session session = 8;
+}
+
+// Session groups pages produced by one agent session or thread. The server
+// treats it as an opaque label: it is validated and stored, never used for
+// access control (ownership still is).
+message Session {
+  // One of "t3code", "claude-code", "codex", "opencode" or "manual".
+  string source = 1;
+  // Opaque id from the source, 1-128 bytes of [A-Za-z0-9._:-].
+  string id = 2;
+  // Human title as known at upload time; may be empty.
+  string title = 3;
 }
 
 message UploadPageRequest {
@@ -66,6 +80,8 @@ message UploadPageRequest {
   // and the value is stored canonicalised with charset=utf-8. Anything else is
   // rejected with INVALID_ARGUMENT. Defaults to "text/html; charset=utf-8".
   string content_type = 3;
+  // Optional agent session to group this page under.
+  Session session = 4;
 }
 
 message UploadPageResponse {
@@ -73,7 +89,10 @@ message UploadPageResponse {
   string url = 2;
 }
 
-message ListPagesRequest {}
+message ListPagesRequest {
+  // Optional filter: only pages of this session (source and id must match).
+  Session session = 1;
+}
 
 message ListPagesResponse {
   repeated PageMeta pages = 1;

@@ -3,12 +3,18 @@
   "cli": "page-report",
   "global_flags": {
     "--server": "server base URL; overrides PR_SERVER_URL and the config file",
-    "--config": "config file path; default $XDG_CONFIG_HOME/page-report/config.yml"
+    "--config": "config file path; default $XDG_CONFIG_HOME/page-report/config.yml",
+    "--verbose": "print non-fatal diagnostics (e.g. session lookup failures) to stderr"
   },
   "config": {
     "file": "$XDG_CONFIG_HOME/page-report/config.yml",
     "credentials": "$XDG_CONFIG_HOME/page-report/credentials.json",
-    "keys": { "server_url": "server base URL, also settable via PR_SERVER_URL" },
+    "keys": {
+      "server_url": "server base URL, also settable via PR_SERVER_URL",
+      "session.detect": "auto-detect the agent session from env vars (default true); PR_SESSION_DETECT",
+      "session.id": "explicit session id, source manual; PR_SESSION_ID",
+      "session.title": "explicit session title; PR_SESSION_TITLE"
+    },
     "precedence": ["--server", "PR_SERVER_URL", "config file"],
     "token_env": "PR_TOKEN overrides the stored credentials file"
   },
@@ -18,14 +24,18 @@
     "logout": { "args": [], "flags": [], "json": false },
     "upload": {
       "args": ["<file.html>"],
-      "flags": ["--title", "--json"],
+      "flags": ["--title", "--session", "--session-title", "--no-session", "--json"],
       "stdout": "the page URL, one line",
-      "json_output": { "id": "string", "url": "string" }
+      "json_output": {
+        "id": "string",
+        "url": "string",
+        "session": { "source": "string", "id": "string", "title": "string", "$comment": "present only when a session was detected or given" }
+      }
     },
     "list": {
       "args": [],
-      "flags": ["--json"],
-      "stdout": "table: ID CREATED SIZE CREATED_BY TITLE",
+      "flags": ["--json", "--session (current | <source>:<id>)"],
+      "stdout": "table: ID CREATED SIZE CREATED_BY SESSION TITLE",
       "json_output": [
         {
           "id": "string",
@@ -33,7 +43,8 @@
           "size_bytes": "number",
           "created_at": "RFC3339 UTC timestamp",
           "created_by": "string (identity)",
-          "url": "string"
+          "url": "string",
+          "session": { "source": "string", "id": "string", "title": "string", "$comment": "present only for pages uploaded in a session" }
         }
       ]
     },
@@ -63,6 +74,10 @@
         "platform": "GOOS/GOARCH"
       }
     }
+  },
+  "session_detection": {
+    "precedence": ["--no-session (disables)", "--session / PR_SESSION_ID -> manual", "T3CODE_THREAD_ID -> t3code", "CLAUDE_CODE_SESSION_ID -> claude-code", "CODEX_THREAD_ID -> codex", "OPENCODE_SESSION_ID -> opencode"],
+    "t3code_lookup": "$T3CODE_CLI_PATH thread show <id> --json, 3s timeout, walks parentThreadId to the root; failures fall back to the raw id with no title"
   },
   "upload_constraints": {
     "max_bytes": 5242880,

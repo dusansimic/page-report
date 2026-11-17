@@ -126,19 +126,19 @@ The file must therefore be **fully self-contained and free of JavaScript**:
 | `page-report login [--token-stdin]` | Stores an API token from the web dashboard. Prompts unless `--token-stdin`. |
 | `page-report logout` | Deletes the stored token. |
 | `page-report whoami [--json]` | Which identity and token the stored credentials belong to. |
-| `page-report upload <file.html> [--title T] [--json]` | Publishes a page; prints its URL. |
-| `page-report list [--json]` | Your own pages, newest first. |
+| `page-report upload <file.html> [--title T] [--session ID] [--session-title T] [--no-session] [--json]` | Publishes a page; prints its URL. |
+| `page-report list [--session current\|<source>:<id>] [--json]` | Your own pages, newest first. |
 | `page-report get <id> [-o F] [--meta] [--json]` | Downloads a page's HTML; stdout unless `-o`. |
 | `page-report delete <id>` | Removes one page. No confirmation prompt. |
 | `page-report prune --older-than <dur>` | Removes all pages older than `dur`. No confirmation prompt. |
 | `page-report update [--check] [--force] [--json]` | Self-updates the binary from the latest GitHub release. |
 | `page-report version [--json]` | Version, commit, build date, Go version, platform. |
 
-Global flags: `--server <url>`, `--config <path>`. Anything else:
+Global flags: `--server <url>`, `--config <path>`, `--verbose`. Anything else:
 `page-report --help`, `page-report <cmd> --help`.
 
-`list` without `--json` is a table (`ID CREATED SIZE CREATED_BY TITLE`); with
-`--json` an array of `{id, title, size_bytes, created_at, created_by, url}`,
+`list` without `--json` is a table (`ID CREATED SIZE CREATED_BY SESSION TITLE`); with
+`--json` an array of `{id, title, size_bytes, created_at, created_by, url, session?}`,
 `created_at` being RFC 3339 UTC. See `templates/metadata.json` for the exact
 shapes of every `--json` output.
 
@@ -163,6 +163,28 @@ pages, but `prune` can still wipe every report *this* user published. **Ask the
 user first**, naming the ids and titles you are about to remove. When replacing
 an earlier revision, upload the new page first, then ask whether to delete the
 old one.
+
+## Session grouping
+
+Uploads are grouped by the agent session they come from, and the dashboard
+folds each group under one collapsible row. **You normally do nothing:** the
+CLI reads the session from the environment, first match wins:
+
+| Env var | Source |
+|---|---|
+| `--session` / `PR_SESSION_ID` | `manual` |
+| `T3CODE_THREAD_ID` | `t3code` (title and parent thread resolved via `t3 thread show`; delegate threads roll up to their root) |
+| `CLAUDE_CODE_SESSION_ID` | `claude-code` |
+| `CODEX_THREAD_ID` | `codex` |
+| `OPENCODE_SESSION_ID` | `opencode` |
+
+- Pass `--session-title "…"` only when the user names the piece of work.
+- Pass `--no-session` for a one-off that has nothing to do with this session.
+- No session variable in your environment (e.g. Gemini CLI)? Generate one id
+  per conversation (`[A-Za-z0-9._:-]`, ≤128 bytes) and reuse it with
+  `--session <id>` on every upload.
+- `page-report list --session current` shows only this session's reports.
+- `--verbose` explains why a session lookup fell back.
 
 ## Patterns
 

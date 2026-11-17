@@ -72,10 +72,14 @@ func (f *fakeStore) GetPageForOwner(_ context.Context, id string, o store.Owner)
 	return p, nil
 }
 
-func (f *fakeStore) ListPagesByOwner(_ context.Context, o store.Owner) ([]store.Page, error) {
+func (f *fakeStore) ListPagesByOwner(_ context.Context, o store.Owner, flt store.PageFilter) ([]store.Page, error) {
 	var out []store.Page
 	for _, p := range f.pages {
 		if !owns(p, o) {
+			continue
+		}
+		if (flt.SessionSource != "" || flt.SessionID != "") &&
+			(p.SessionSource != flt.SessionSource || p.SessionID != flt.SessionID) {
 			continue
 		}
 		p.Content = nil
@@ -988,5 +992,74 @@ func TestLegacyPageOwnership(t *testing.T) {
 		connect.NewRequest(&pagereportv1.DashboardServiceListPagesRequest{}))
 	if err != nil || len(pages.Msg.GetPages()) != 1 {
 		t.Fatalf("legacy page not visible to its creator: %v, %d", err, len(pages.Msg.GetPages()))
+	}
+}
+
+func TestUploadSessionAndListFilter(t *testing.T) {
+	st := newFakeStore()
+	h := testServer(t, st, fakeSessions{},
+		fakeValidator{id: auth.Identity{Subject: "s1", Email: "me@example.org"}})
+	c := bearerClient(rpcTestServer(t, h), nil)
+	ctx := context.Background()
+
+	upload := func(sess *pagereportv1.Session) (*connect.Response[pagereportv1.UploadPageResponse], error) {
+		return c.UploadPage(ctx, connect.NewRequest(&pagereportv1.UploadPageRequest{
+			Content: []byte("<html>r</html>"), Session: sess,
+		}))
+	}
+	a, err := upload(&pagereportv1.Session{Source: "t3code", Id: "thr-1", Title: "  Thread \x00one "})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := upload(&pagereportv1.Session{Source: "t3code", Id: "thr-2"}); err != nil {
+		t.Fatal(err)
+	}
+	plain, err := upload(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := c.ListPages(ctx, connect.NewRequest(&pagereportv1.ListPagesRequest{}))
+	if err != nil || len(list.Msg.GetPages()) != 3 {
+		t.Fatalf("list: %v, %d", err, len(list.Msg.GetPages()))
+	}
+	for _, m := range list.Msg.GetPages() {
+		switch m.GetId() {
+		case a.Msg.GetId():
+			if s := m.GetSession(); s.GetSource() != "t3code" || s.GetId() != "thr-1" || s.GetTitle() != "Thread one" {
+				t.Errorf("session meta = %v", s)
+			}
+		case plain.Msg.GetId():
+			if m.GetSession() != nil {
+				t.Errorf("ungrouped page has session %v", m.GetSession())
+			}
+		}
+	}
+
+	filtered, err := c.ListPages(ctx, connect.NewRequest(&pagereportv1.ListPagesRequest{
+		Session: &pagereportv1.Session{Source: "t3code", Id: "thr-1"},
+	}))
+	if err != nil || len(filtered.Msg.GetPages()) != 1 || filtered.Msg.GetPages()[0].GetId() != a.Msg.GetId() {
+		t.Fatalf("filter: %v, %v", err, filtered.Msg.GetPages())
+	}
+
+	bad := []*pagereportv1.Session{
+		{Source: "t3code", Id: "a b/c"},
+		{Source: "nope", Id: "x"},
+		{Source: "t3code"},
+		{Id: "x"},
+	}
+	for _, sess := range bad {
+		if _, err := upload(sess); connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Errorf("upload %v: got %v, want invalid_argument", sess, err)
+		}
+		if _, err := c.ListPages(ctx, connect.NewRequest(&pagereportv1.ListPagesRequest{
+			Session: sess,
+		})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Errorf("list %v: got %v, want invalid_argument", sess, err)
+		}
+	}
+	if len(st.pages) != 3 {
+		t.Errorf("rejected uploads were stored: %d pages", len(st.pages))
 	}
 }

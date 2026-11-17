@@ -12,13 +12,24 @@ import (
 
 // Config is the on-disk shape of ~/.config/page-report/config.yml.
 type Config struct {
-	ServerURL string `mapstructure:"server_url"`
+	ServerURL string        `mapstructure:"server_url"`
+	Session   SessionConfig `mapstructure:"session"`
+}
+
+// SessionConfig holds the session-grouping settings (session.* keys).
+type SessionConfig struct {
+	// Detect enables auto-detection from agent environment variables.
+	Detect bool `mapstructure:"detect"`
+	// ID is an explicit session id (source "manual").
+	ID string `mapstructure:"id"`
+	// Title is an explicit session title.
+	Title string `mapstructure:"title"`
 }
 
 // keys lists every config key so each can be explicitly bound to its PR_* env
 // var; viper's AutomaticEnv alone does not surface env-only keys during
 // Unmarshal.
-var keys = []string{"server_url"}
+var keys = []string{"server_url", "session.detect", "session.id", "session.title"}
 
 // configDir returns $XDG_CONFIG_HOME/page-report, falling back to
 // ~/.config/page-report. The directory is not created.
@@ -44,6 +55,7 @@ func LoadConfig(path string) (*Config, error) {
 	v.SetEnvPrefix("PR")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
+	v.SetDefault("session.detect", true)
 	for _, k := range keys {
 		if err := v.BindEnv(k); err != nil {
 			return nil, fmt.Errorf("bind env for %s: %w", k, err)

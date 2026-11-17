@@ -139,7 +139,7 @@ echo 'server_url: https://reports.example.org' > ~/.config/page-report/config.ym
 page-report login                          # paste a token from the Tokens page
 page-report whoami                         # which identity and token is in use
 page-report upload report.html --title "Weekly metrics"   # prints the page URL
-page-report list [--json]
+page-report list [--session current] [--json]
 page-report get <id> -o report.html        # download stored HTML (stdout by default)
 page-report delete <id>
 page-report prune --older-than 30d
@@ -155,6 +155,22 @@ PR_TOKEN=prt_... page-report upload report.html   # or skip storing entirely
 ```
 
 `PR_TOKEN` takes precedence over the stored credentials.
+
+Uploads made from a coding agent are grouped by its session and folded under
+one collapsible row in the dashboard. The CLI detects the session from the
+environment, first match wins:
+
+| Agent | Env var | Source |
+|---|---|---|
+| any | `--session` / `PR_SESSION_ID` | `manual` |
+| T3 Code | `T3CODE_THREAD_ID` | `t3code` — title and root thread resolved via `t3 thread show` |
+| Claude Code ≥ 2.1.132 | `CLAUDE_CODE_SESSION_ID` | `claude-code` |
+| Codex | `CODEX_THREAD_ID` | `codex` |
+| OpenCode | `OPENCODE_SESSION_ID` (+ `OPENCODE_SESSION_TITLE`) | `opencode` |
+
+`--no-session` opts a single upload out; `session.detect: false` turns
+auto-detection off. Gemini CLI exposes no session id to shell commands, so use
+`--session` there.
 
 Listing, downloading, deleting and pruning only ever touch your own reports.
 Report links themselves stay shareable: any allowlisted person can open one.
@@ -184,6 +200,9 @@ every `--json` output).
 | Key | Env var | Description |
 |---|---|---|
 | `server_url` | `PR_SERVER_URL` | server base URL |
+| `session.detect` | `PR_SESSION_DETECT` | auto-detect the agent session from env vars (default `true`); explicit `--session` still works when `false` |
+| `session.id` | `PR_SESSION_ID` | explicit session id (source `manual`); `--session` overrides |
+| `session.title` | `PR_SESSION_TITLE` | explicit session title; `--session-title` overrides |
 | — | `PR_TOKEN` | API token; overrides the stored credentials |
 
 Precedence for the server URL is `--server` > `PR_SERVER_URL` > config file;

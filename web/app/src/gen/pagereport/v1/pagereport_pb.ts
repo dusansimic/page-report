@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file pagereport/v1/pagereport.proto.
  */
 export const file_pagereport_v1_pagereport: GenFile = /*@__PURE__*/
-  fileDesc("Ch5wYWdlcmVwb3J0L3YxL3BhZ2VyZXBvcnQucHJvdG8SDXBhZ2VyZXBvcnQudjEiFgoUR2V0U2VydmVySW5mb1JlcXVlc3QiVQoVR2V0U2VydmVySW5mb1Jlc3BvbnNlEhAKCGJhc2VfdXJsGAEgASgJEhIKCnRva2Vuc191cmwYAiABKAkSFgoOc2VydmVyX3ZlcnNpb24YAyABKAkiDwoNV2hvQW1JUmVxdWVzdCJlCg5XaG9BbUlSZXNwb25zZRIPCgdzdWJqZWN0GAEgASgJEg0KBWVtYWlsGAIgASgJEg0KBWxvZ2luGAMgASgJEhAKCHRva2VuX2lkGAQgASgJEhIKCnRva2VuX25hbWUYBSABKAkihAEKCFBhZ2VNZXRhEgoKAmlkGAEgASgJEg0KBXRpdGxlGAIgASgJEhQKDGNvbnRlbnRfdHlwZRgDIAEoCRISCgpzaXplX2J5dGVzGAQgASgDEhIKCmNyZWF0ZWRfYXQYBSABKAMSEgoKY3JlYXRlZF9ieRgGIAEoCRILCgN1cmwYByABKAkiSQoRVXBsb2FkUGFnZVJlcXVlc3QSDwoHY29udGVudBgBIAEoDBINCgV0aXRsZRgCIAEoCRIUCgxjb250ZW50X3R5cGUYAyABKAkiLQoSVXBsb2FkUGFnZVJlc3BvbnNlEgoKAmlkGAEgASgJEgsKA3VybBgCIAEoCSISChBMaXN0UGFnZXNSZXF1ZXN0IjsKEUxpc3RQYWdlc1Jlc3BvbnNlEiYKBXBhZ2VzGAEgAygLMhcucGFnZXJlcG9ydC52MS5QYWdlTWV0YSI1Cg5HZXRQYWdlUmVxdWVzdBIKCgJpZBgBIAEoCRIXCg9pbmNsdWRlX2NvbnRlbnQYAiABKAgiSQoPR2V0UGFnZVJlc3BvbnNlEiUKBG1ldGEYASABKAsyFy5wYWdlcmVwb3J0LnYxLlBhZ2VNZXRhEg8KB2NvbnRlbnQYAiABKAwiHwoRRGVsZXRlUGFnZVJlcXVlc3QSCgoCaWQYASABKAkiFAoSRGVsZXRlUGFnZVJlc3BvbnNlIi8KEVBydW5lUGFnZXNSZXF1ZXN0EhoKEm9sZGVyX3RoYW5fc2Vjb25kcxgBIAEoAyIrChJQcnVuZVBhZ2VzUmVzcG9uc2USFQoNZGVsZXRlZF9jb3VudBgBIAEoAzLRBAoLUGFnZVNlcnZpY2USXAoNR2V0U2VydmVySW5mbxIjLnBhZ2VyZXBvcnQudjEuR2V0U2VydmVySW5mb1JlcXVlc3QaJC5wYWdlcmVwb3J0LnYxLkdldFNlcnZlckluZm9SZXNwb25zZSIAEkcKBldob0FtSRIcLnBhZ2VyZXBvcnQudjEuV2hvQW1JUmVxdWVzdBodLnBhZ2VyZXBvcnQudjEuV2hvQW1JUmVzcG9uc2UiABJTCgpVcGxvYWRQYWdlEiAucGFnZXJlcG9ydC52MS5VcGxvYWRQYWdlUmVxdWVzdBohLnBhZ2VyZXBvcnQudjEuVXBsb2FkUGFnZVJlc3BvbnNlIgASUAoJTGlzdFBhZ2VzEh8ucGFnZXJlcG9ydC52MS5MaXN0UGFnZXNSZXF1ZXN0GiAucGFnZXJlcG9ydC52MS5MaXN0UGFnZXNSZXNwb25zZSIAEkoKB0dldFBhZ2USHS5wYWdlcmVwb3J0LnYxLkdldFBhZ2VSZXF1ZXN0Gh4ucGFnZXJlcG9ydC52MS5HZXRQYWdlUmVzcG9uc2UiABJTCgpEZWxldGVQYWdlEiAucGFnZXJlcG9ydC52MS5EZWxldGVQYWdlUmVxdWVzdBohLnBhZ2VyZXBvcnQudjEuRGVsZXRlUGFnZVJlc3BvbnNlIgASUwoKUHJ1bmVQYWdlcxIgLnBhZ2VyZXBvcnQudjEuUHJ1bmVQYWdlc1JlcXVlc3QaIS5wYWdlcmVwb3J0LnYxLlBydW5lUGFnZXNSZXNwb25zZSIAQj1aO2dpdGh1Yi5jb20vZHVzYW4vcGFnZS1yZXBvcnQvZ2VuL3BhZ2VyZXBvcnQvdjE7cGFnZXJlcG9ydHYxYgZwcm90bzM");
+  fileDesc("Ch5wYWdlcmVwb3J0L3YxL3BhZ2VyZXBvcnQucHJvdG8SDXBhZ2VyZXBvcnQudjEiFgoUR2V0U2VydmVySW5mb1JlcXVlc3QiVQoVR2V0U2VydmVySW5mb1Jlc3BvbnNlEhAKCGJhc2VfdXJsGAEgASgJEhIKCnRva2Vuc191cmwYAiABKAkSFgoOc2VydmVyX3ZlcnNpb24YAyABKAkiDwoNV2hvQW1JUmVxdWVzdCJlCg5XaG9BbUlSZXNwb25zZRIPCgdzdWJqZWN0GAEgASgJEg0KBWVtYWlsGAIgASgJEg0KBWxvZ2luGAMgASgJEhAKCHRva2VuX2lkGAQgASgJEhIKCnRva2VuX25hbWUYBSABKAkirQEKCFBhZ2VNZXRhEgoKAmlkGAEgASgJEg0KBXRpdGxlGAIgASgJEhQKDGNvbnRlbnRfdHlwZRgDIAEoCRISCgpzaXplX2J5dGVzGAQgASgDEhIKCmNyZWF0ZWRfYXQYBSABKAMSEgoKY3JlYXRlZF9ieRgGIAEoCRILCgN1cmwYByABKAkSJwoHc2Vzc2lvbhgIIAEoCzIWLnBhZ2VyZXBvcnQudjEuU2Vzc2lvbiI0CgdTZXNzaW9uEg4KBnNvdXJjZRgBIAEoCRIKCgJpZBgCIAEoCRINCgV0aXRsZRgDIAEoCSJyChFVcGxvYWRQYWdlUmVxdWVzdBIPCgdjb250ZW50GAEgASgMEg0KBXRpdGxlGAIgASgJEhQKDGNvbnRlbnRfdHlwZRgDIAEoCRInCgdzZXNzaW9uGAQgASgLMhYucGFnZXJlcG9ydC52MS5TZXNzaW9uIi0KElVwbG9hZFBhZ2VSZXNwb25zZRIKCgJpZBgBIAEoCRILCgN1cmwYAiABKAkiOwoQTGlzdFBhZ2VzUmVxdWVzdBInCgdzZXNzaW9uGAEgASgLMhYucGFnZXJlcG9ydC52MS5TZXNzaW9uIjsKEUxpc3RQYWdlc1Jlc3BvbnNlEiYKBXBhZ2VzGAEgAygLMhcucGFnZXJlcG9ydC52MS5QYWdlTWV0YSI1Cg5HZXRQYWdlUmVxdWVzdBIKCgJpZBgBIAEoCRIXCg9pbmNsdWRlX2NvbnRlbnQYAiABKAgiSQoPR2V0UGFnZVJlc3BvbnNlEiUKBG1ldGEYASABKAsyFy5wYWdlcmVwb3J0LnYxLlBhZ2VNZXRhEg8KB2NvbnRlbnQYAiABKAwiHwoRRGVsZXRlUGFnZVJlcXVlc3QSCgoCaWQYASABKAkiFAoSRGVsZXRlUGFnZVJlc3BvbnNlIi8KEVBydW5lUGFnZXNSZXF1ZXN0EhoKEm9sZGVyX3RoYW5fc2Vjb25kcxgBIAEoAyIrChJQcnVuZVBhZ2VzUmVzcG9uc2USFQoNZGVsZXRlZF9jb3VudBgBIAEoAzLRBAoLUGFnZVNlcnZpY2USXAoNR2V0U2VydmVySW5mbxIjLnBhZ2VyZXBvcnQudjEuR2V0U2VydmVySW5mb1JlcXVlc3QaJC5wYWdlcmVwb3J0LnYxLkdldFNlcnZlckluZm9SZXNwb25zZSIAEkcKBldob0FtSRIcLnBhZ2VyZXBvcnQudjEuV2hvQW1JUmVxdWVzdBodLnBhZ2VyZXBvcnQudjEuV2hvQW1JUmVzcG9uc2UiABJTCgpVcGxvYWRQYWdlEiAucGFnZXJlcG9ydC52MS5VcGxvYWRQYWdlUmVxdWVzdBohLnBhZ2VyZXBvcnQudjEuVXBsb2FkUGFnZVJlc3BvbnNlIgASUAoJTGlzdFBhZ2VzEh8ucGFnZXJlcG9ydC52MS5MaXN0UGFnZXNSZXF1ZXN0GiAucGFnZXJlcG9ydC52MS5MaXN0UGFnZXNSZXNwb25zZSIAEkoKB0dldFBhZ2USHS5wYWdlcmVwb3J0LnYxLkdldFBhZ2VSZXF1ZXN0Gh4ucGFnZXJlcG9ydC52MS5HZXRQYWdlUmVzcG9uc2UiABJTCgpEZWxldGVQYWdlEiAucGFnZXJlcG9ydC52MS5EZWxldGVQYWdlUmVxdWVzdBohLnBhZ2VyZXBvcnQudjEuRGVsZXRlUGFnZVJlc3BvbnNlIgASUwoKUHJ1bmVQYWdlcxIgLnBhZ2VyZXBvcnQudjEuUHJ1bmVQYWdlc1JlcXVlc3QaIS5wYWdlcmVwb3J0LnYxLlBydW5lUGFnZXNSZXNwb25zZSIAQj1aO2dpdGh1Yi5jb20vZHVzYW4vcGFnZS1yZXBvcnQvZ2VuL3BhZ2VyZXBvcnQvdjE7cGFnZXJlcG9ydHYxYgZwcm90bzM");
 
 /**
  * @generated from message pagereport.v1.GetServerInfoRequest
@@ -150,6 +150,13 @@ export type PageMeta = Message<"pagereport.v1.PageMeta"> & {
    * @generated from field: string url = 7;
    */
   url: string;
+
+  /**
+   * Agent session the page was uploaded from. Unset when none was detected.
+   *
+   * @generated from field: pagereport.v1.Session session = 8;
+   */
+  session?: Session | undefined;
 };
 
 /**
@@ -158,6 +165,43 @@ export type PageMeta = Message<"pagereport.v1.PageMeta"> & {
  */
 export const PageMetaSchema: GenMessage<PageMeta> = /*@__PURE__*/
   messageDesc(file_pagereport_v1_pagereport, 4);
+
+/**
+ * Session groups pages produced by one agent session or thread. The server
+ * treats it as an opaque label: it is validated and stored, never used for
+ * access control (ownership still is).
+ *
+ * @generated from message pagereport.v1.Session
+ */
+export type Session = Message<"pagereport.v1.Session"> & {
+  /**
+   * One of "t3code", "claude-code", "codex", "opencode" or "manual".
+   *
+   * @generated from field: string source = 1;
+   */
+  source: string;
+
+  /**
+   * Opaque id from the source, 1-128 bytes of [A-Za-z0-9._:-].
+   *
+   * @generated from field: string id = 2;
+   */
+  id: string;
+
+  /**
+   * Human title as known at upload time; may be empty.
+   *
+   * @generated from field: string title = 3;
+   */
+  title: string;
+};
+
+/**
+ * Describes the message pagereport.v1.Session.
+ * Use `create(SessionSchema)` to create a new message.
+ */
+export const SessionSchema: GenMessage<Session> = /*@__PURE__*/
+  messageDesc(file_pagereport_v1_pagereport, 5);
 
 /**
  * @generated from message pagereport.v1.UploadPageRequest
@@ -183,6 +227,13 @@ export type UploadPageRequest = Message<"pagereport.v1.UploadPageRequest"> & {
    * @generated from field: string content_type = 3;
    */
   contentType: string;
+
+  /**
+   * Optional agent session to group this page under.
+   *
+   * @generated from field: pagereport.v1.Session session = 4;
+   */
+  session?: Session | undefined;
 };
 
 /**
@@ -190,7 +241,7 @@ export type UploadPageRequest = Message<"pagereport.v1.UploadPageRequest"> & {
  * Use `create(UploadPageRequestSchema)` to create a new message.
  */
 export const UploadPageRequestSchema: GenMessage<UploadPageRequest> = /*@__PURE__*/
-  messageDesc(file_pagereport_v1_pagereport, 5);
+  messageDesc(file_pagereport_v1_pagereport, 6);
 
 /**
  * @generated from message pagereport.v1.UploadPageResponse
@@ -212,12 +263,18 @@ export type UploadPageResponse = Message<"pagereport.v1.UploadPageResponse"> & {
  * Use `create(UploadPageResponseSchema)` to create a new message.
  */
 export const UploadPageResponseSchema: GenMessage<UploadPageResponse> = /*@__PURE__*/
-  messageDesc(file_pagereport_v1_pagereport, 6);
+  messageDesc(file_pagereport_v1_pagereport, 7);
 
 /**
  * @generated from message pagereport.v1.ListPagesRequest
  */
 export type ListPagesRequest = Message<"pagereport.v1.ListPagesRequest"> & {
+  /**
+   * Optional filter: only pages of this session (source and id must match).
+   *
+   * @generated from field: pagereport.v1.Session session = 1;
+   */
+  session?: Session | undefined;
 };
 
 /**
@@ -225,7 +282,7 @@ export type ListPagesRequest = Message<"pagereport.v1.ListPagesRequest"> & {
  * Use `create(ListPagesRequestSchema)` to create a new message.
  */
 export const ListPagesRequestSchema: GenMessage<ListPagesRequest> = /*@__PURE__*/
-  messageDesc(file_pagereport_v1_pagereport, 7);
+  messageDesc(file_pagereport_v1_pagereport, 8);
 
 /**
  * @generated from message pagereport.v1.ListPagesResponse
@@ -242,7 +299,7 @@ export type ListPagesResponse = Message<"pagereport.v1.ListPagesResponse"> & {
  * Use `create(ListPagesResponseSchema)` to create a new message.
  */
 export const ListPagesResponseSchema: GenMessage<ListPagesResponse> = /*@__PURE__*/
-  messageDesc(file_pagereport_v1_pagereport, 8);
+  messageDesc(file_pagereport_v1_pagereport, 9);
 
 /**
  * @generated from message pagereport.v1.GetPageRequest
@@ -266,7 +323,7 @@ export type GetPageRequest = Message<"pagereport.v1.GetPageRequest"> & {
  * Use `create(GetPageRequestSchema)` to create a new message.
  */
 export const GetPageRequestSchema: GenMessage<GetPageRequest> = /*@__PURE__*/
-  messageDesc(file_pagereport_v1_pagereport, 9);
+  messageDesc(file_pagereport_v1_pagereport, 10);
 
 /**
  * @generated from message pagereport.v1.GetPageResponse
@@ -288,7 +345,7 @@ export type GetPageResponse = Message<"pagereport.v1.GetPageResponse"> & {
  * Use `create(GetPageResponseSchema)` to create a new message.
  */
 export const GetPageResponseSchema: GenMessage<GetPageResponse> = /*@__PURE__*/
-  messageDesc(file_pagereport_v1_pagereport, 10);
+  messageDesc(file_pagereport_v1_pagereport, 11);
 
 /**
  * @generated from message pagereport.v1.DeletePageRequest
@@ -305,7 +362,7 @@ export type DeletePageRequest = Message<"pagereport.v1.DeletePageRequest"> & {
  * Use `create(DeletePageRequestSchema)` to create a new message.
  */
 export const DeletePageRequestSchema: GenMessage<DeletePageRequest> = /*@__PURE__*/
-  messageDesc(file_pagereport_v1_pagereport, 11);
+  messageDesc(file_pagereport_v1_pagereport, 12);
 
 /**
  * @generated from message pagereport.v1.DeletePageResponse
@@ -318,7 +375,7 @@ export type DeletePageResponse = Message<"pagereport.v1.DeletePageResponse"> & {
  * Use `create(DeletePageResponseSchema)` to create a new message.
  */
 export const DeletePageResponseSchema: GenMessage<DeletePageResponse> = /*@__PURE__*/
-  messageDesc(file_pagereport_v1_pagereport, 12);
+  messageDesc(file_pagereport_v1_pagereport, 13);
 
 /**
  * @generated from message pagereport.v1.PrunePagesRequest
@@ -337,7 +394,7 @@ export type PrunePagesRequest = Message<"pagereport.v1.PrunePagesRequest"> & {
  * Use `create(PrunePagesRequestSchema)` to create a new message.
  */
 export const PrunePagesRequestSchema: GenMessage<PrunePagesRequest> = /*@__PURE__*/
-  messageDesc(file_pagereport_v1_pagereport, 13);
+  messageDesc(file_pagereport_v1_pagereport, 14);
 
 /**
  * @generated from message pagereport.v1.PrunePagesResponse
@@ -354,7 +411,7 @@ export type PrunePagesResponse = Message<"pagereport.v1.PrunePagesResponse"> & {
  * Use `create(PrunePagesResponseSchema)` to create a new message.
  */
 export const PrunePagesResponseSchema: GenMessage<PrunePagesResponse> = /*@__PURE__*/
-  messageDesc(file_pagereport_v1_pagereport, 14);
+  messageDesc(file_pagereport_v1_pagereport, 15);
 
 /**
  * PageService is the CLI-facing API for uploading and managing report pages.

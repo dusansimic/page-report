@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,6 +38,7 @@ var (
 var (
 	serverURL  string
 	configPath string
+	verbose    bool
 	cfg        *client.Config
 )
 
@@ -53,6 +55,8 @@ func main() {
 		"page-report server base URL; falls back to PR_SERVER_URL, then the config file")
 	root.PersistentFlags().StringVar(&configPath, "config", "",
 		"path to config file (default: $XDG_CONFIG_HOME/page-report/config.yml)")
+	root.PersistentFlags().BoolVar(&verbose, "verbose", false,
+		"print non-fatal diagnostics (e.g. session lookup failures) to stderr")
 	root.PersistentPreRunE = func(*cobra.Command, []string) error {
 		var err error
 		cfg, err = client.LoadConfig(configPath)
@@ -253,6 +257,7 @@ func logoutCmd() *cobra.Command {
 func uploadCmd() *cobra.Command {
 	var title string
 	var asJSON bool
+	var sf sessionFlags
 	cmd := &cobra.Command{
 		Use:   "upload <file.html>",
 		Short: "Upload an HTML report; prints its shareable URL",
@@ -270,15 +275,21 @@ func uploadCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			resp, err := c.UploadPage(cmd.Context(), connect.NewRequest(&pagereportv1.UploadPageRequest{
-				Content: content,
-				Title:   title,
-			}))
+			sess, grouped := sf.resolve(cmd.Context())
+			req := &pagereportv1.UploadPageRequest{Content: content, Title: title}
+			if grouped {
+				req.Session = &pagereportv1.Session{Source: sess.Source, Id: sess.ID, Title: sess.Title}
+			}
+			resp, err := c.UploadPage(cmd.Context(), connect.NewRequest(req))
 			if err != nil {
 				return err
 			}
 			if asJSON {
-				return printJSON(map[string]string{"id": resp.Msg.GetId(), "url": resp.Msg.GetUrl()})
+				out := map[string]any{"id": resp.Msg.GetId(), "url": resp.Msg.GetUrl()}
+				if grouped {
+					out["session"] = sessionJSON(req.Session)
+				}
+				return printJSON(out)
 			}
 			fmt.Println(resp.Msg.GetUrl())
 			return nil
@@ -286,11 +297,97 @@ func uploadCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&title, "title", "", "page title (default: filename without extension)")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "output JSON")
+	sf.register(cmd)
 	return cmd
+}
+
+// sessionFlags are the upload flags that control session grouping.
+type sessionFlags struct {
+	id, title string
+	none      bool
+}
+
+func (f *sessionFlags) register(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&f.id, "session", "",
+		"group under this session id (source \"manual\"); falls back to PR_SESSION_ID, then auto-detection")
+	cmd.Flags().StringVar(&f.title, "session-title", "",
+		"session title; falls back to PR_SESSION_TITLE, then the agent's own title")
+	cmd.Flags().BoolVar(&f.none, "no-session", false,
+		"do not attach this report to any session")
+}
+
+// resolve applies flag > config/env > auto-detection. Never fails: session
+// lookup is best effort and must not block an upload.
+func (f *sessionFlags) resolve(ctx context.Context) (client.Session, bool) {
+	if f.none {
+		return client.Session{}, false
+	}
+	return detectSession(ctx, f.id, f.title)
+}
+
+// detectSession merges the explicit id/title flags over the config values and
+// runs the detector.
+func detectSession(ctx context.Context, id, title string) (client.Session, bool) {
+	autoDetect := true
+	if cfg != nil {
+		autoDetect = cfg.Session.Detect
+		if strings.TrimSpace(id) == "" {
+			id = cfg.Session.ID
+		}
+		if strings.TrimSpace(title) == "" {
+			title = cfg.Session.Title
+		}
+	}
+	var debugf func(string, ...any)
+	if verbose {
+		debugf = func(format string, args ...any) { fmt.Fprintf(os.Stderr, format+"\n", args...) }
+	}
+	return client.NewDetector(debugf).Detect(ctx, client.Session{ID: id, Title: title}, autoDetect)
+}
+
+func sessionJSON(s *pagereportv1.Session) map[string]string {
+	return map[string]string{"source": s.GetSource(), "id": s.GetId(), "title": s.GetTitle()}
+}
+
+// sessionLabel is the SESSION column: title, else source:first-8-of-id, else "-".
+func sessionLabel(s *pagereportv1.Session) string {
+	if s.GetId() == "" {
+		return "-"
+	}
+	if t := s.GetTitle(); t != "" {
+		return t
+	}
+	id := s.GetId()
+	if len(id) > 8 {
+		id = id[:8]
+	}
+	return s.GetSource() + ":" + id
+}
+
+// parseSessionFilter turns --session on `list` into a request filter.
+func parseSessionFilter(ctx context.Context, v string) (*pagereportv1.Session, error) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return nil, nil
+	}
+	if v == "current" {
+		s, ok := detectSession(ctx, "", "")
+		if !ok {
+			return nil, errors.New("--session current: no session detected " +
+				"(set PR_SESSION_ID or run inside a supported agent)")
+		}
+		return &pagereportv1.Session{Source: s.Source, Id: s.ID}, nil
+	}
+	source, id, ok := strings.Cut(v, ":")
+	if !ok || source == "" || id == "" {
+		return nil, fmt.Errorf("invalid --session %q: want \"current\" or <source>:<id>", v)
+	}
+	return &pagereportv1.Session{Source: source, Id: id}, nil
 }
 
 func listCmd() *cobra.Command {
 	var asJSON bool
+	var sessionFilter string
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all pages",
@@ -300,7 +397,11 @@ func listCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			resp, err := c.ListPages(cmd.Context(), connect.NewRequest(&pagereportv1.ListPagesRequest{}))
+			filter, err := parseSessionFilter(cmd.Context(), sessionFilter)
+			if err != nil {
+				return err
+			}
+			resp, err := c.ListPages(cmd.Context(), connect.NewRequest(&pagereportv1.ListPagesRequest{Session: filter}))
 			if err != nil {
 				return err
 			}
@@ -308,31 +409,38 @@ func listCmd() *cobra.Command {
 			if asJSON {
 				out := make([]map[string]any, 0, len(pages))
 				for _, p := range pages {
-					out = append(out, map[string]any{
+					m := map[string]any{
 						"id":         p.GetId(),
 						"title":      p.GetTitle(),
 						"size_bytes": p.GetSizeBytes(),
 						"created_at": time.Unix(p.GetCreatedAt(), 0).UTC().Format(time.RFC3339),
 						"created_by": p.GetCreatedBy(),
 						"url":        p.GetUrl(),
-					})
+					}
+					if p.GetSession().GetId() != "" {
+						m["session"] = sessionJSON(p.GetSession())
+					}
+					out = append(out, m)
 				}
 				return printJSON(out)
 			}
 			tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-			fmt.Fprintln(tw, "ID\tCREATED\tSIZE\tCREATED_BY\tTITLE")
+			fmt.Fprintln(tw, "ID\tCREATED\tSIZE\tCREATED_BY\tSESSION\tTITLE")
 			for _, p := range pages {
-				fmt.Fprintf(tw, "%s\t%s\t%d\t%s\t%s\n",
+				fmt.Fprintf(tw, "%s\t%s\t%d\t%s\t%s\t%s\n",
 					p.GetId(),
 					time.Unix(p.GetCreatedAt(), 0).UTC().Format(time.RFC3339),
 					p.GetSizeBytes(),
 					p.GetCreatedBy(),
+					sessionLabel(p.GetSession()),
 					p.GetTitle())
 			}
 			return tw.Flush()
 		},
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "output JSON")
+	cmd.Flags().StringVar(&sessionFilter, "session", "",
+		`only pages of one session: "current" (detected) or "<source>:<id>"`)
 	return cmd
 }
 
@@ -398,7 +506,7 @@ func getCmd() *cobra.Command {
 func printMeta(p *pagereportv1.PageMeta, asJSON bool) error {
 	createdAt := time.Unix(p.GetCreatedAt(), 0).UTC().Format(time.RFC3339)
 	if asJSON {
-		return printJSON(map[string]any{
+		m := map[string]any{
 			"id":           p.GetId(),
 			"title":        p.GetTitle(),
 			"content_type": p.GetContentType(),
@@ -406,7 +514,11 @@ func printMeta(p *pagereportv1.PageMeta, asJSON bool) error {
 			"created_at":   createdAt,
 			"created_by":   p.GetCreatedBy(),
 			"url":          p.GetUrl(),
-		})
+		}
+		if p.GetSession().GetId() != "" {
+			m["session"] = sessionJSON(p.GetSession())
+		}
+		return printJSON(m)
 	}
 	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 	fmt.Fprintf(tw, "ID\t%s\n", p.GetId())
@@ -416,6 +528,11 @@ func printMeta(p *pagereportv1.PageMeta, asJSON bool) error {
 	fmt.Fprintf(tw, "CREATED\t%s\n", createdAt)
 	fmt.Fprintf(tw, "CREATED_BY\t%s\n", p.GetCreatedBy())
 	fmt.Fprintf(tw, "URL\t%s\n", p.GetUrl())
+	if sess := p.GetSession(); sess.GetId() != "" {
+		fmt.Fprintf(tw, "SESSION_SOURCE\t%s\n", sess.GetSource())
+		fmt.Fprintf(tw, "SESSION_ID\t%s\n", sess.GetId())
+		fmt.Fprintf(tw, "SESSION_TITLE\t%s\n", sess.GetTitle())
+	}
 	return tw.Flush()
 }
 

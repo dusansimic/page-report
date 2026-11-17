@@ -62,10 +62,11 @@ func ownerClause(o Owner) (string, []any) {
 
 func (s *sqliteStore) CreatePage(ctx context.Context, p Page) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO pages (id, title, content, content_type, size_bytes, created_at, created_by, owner_subject)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO pages (id, title, content, content_type, size_bytes, created_at, created_by, owner_subject,
+		 session_source, session_id, session_title)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.ID, p.Title, p.Content, p.ContentType, p.SizeBytes, p.CreatedAt.Unix(),
-		p.CreatedBy, p.OwnerSubject)
+		p.CreatedBy, p.OwnerSubject, p.SessionSource, p.SessionID, p.SessionTitle)
 	if err != nil {
 		return fmt.Errorf("create page %s: %w", p.ID, err)
 	}
@@ -74,13 +75,13 @@ func (s *sqliteStore) CreatePage(ctx context.Context, p Page) error {
 
 func (s *sqliteStore) GetPage(ctx context.Context, id string) (Page, error) {
 	return s.getPage(ctx, `SELECT id, title, content, content_type, size_bytes, created_at,
-		created_by, owner_subject FROM pages WHERE id = ?`, id)
+		created_by, owner_subject, session_source, session_id, session_title FROM pages WHERE id = ?`, id)
 }
 
 func (s *sqliteStore) GetPageForOwner(ctx context.Context, id string, o Owner) (Page, error) {
 	clause, args := ownerClause(o)
 	query := `SELECT id, title, content, content_type, size_bytes, created_at,
-		created_by, owner_subject FROM pages WHERE id = ? AND ` + clause
+		created_by, owner_subject, session_source, session_id, session_title FROM pages WHERE id = ? AND ` + clause
 	return s.getPage(ctx, query, append([]any{id}, args...)...)
 }
 
@@ -89,7 +90,7 @@ func (s *sqliteStore) getPage(ctx context.Context, query string, args ...any) (P
 	var createdAt int64
 	err := s.db.QueryRowContext(ctx, query, args...).
 		Scan(&p.ID, &p.Title, &p.Content, &p.ContentType, &p.SizeBytes, &createdAt,
-			&p.CreatedBy, &p.OwnerSubject)
+			&p.CreatedBy, &p.OwnerSubject, &p.SessionSource, &p.SessionID, &p.SessionTitle)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Page{}, ErrNotFound
 	}
@@ -100,10 +101,15 @@ func (s *sqliteStore) getPage(ctx context.Context, query string, args ...any) (P
 	return p, nil
 }
 
-func (s *sqliteStore) ListPagesByOwner(ctx context.Context, o Owner) ([]Page, error) {
+func (s *sqliteStore) ListPagesByOwner(ctx context.Context, o Owner, f PageFilter) ([]Page, error) {
 	clause, args := ownerClause(o)
+	if f.SessionSource != "" || f.SessionID != "" {
+		clause += " AND session_source = ? AND session_id = ?"
+		args = append(args, f.SessionSource, f.SessionID)
+	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, title, content_type, size_bytes, created_at, created_by, owner_subject
+		`SELECT id, title, content_type, size_bytes, created_at, created_by, owner_subject,
+		 session_source, session_id, session_title
 		 FROM pages WHERE `+clause+` ORDER BY created_at DESC, id`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list pages: %w", err)
@@ -115,7 +121,7 @@ func (s *sqliteStore) ListPagesByOwner(ctx context.Context, o Owner) ([]Page, er
 		var p Page
 		var createdAt int64
 		if err := rows.Scan(&p.ID, &p.Title, &p.ContentType, &p.SizeBytes, &createdAt,
-			&p.CreatedBy, &p.OwnerSubject); err != nil {
+			&p.CreatedBy, &p.OwnerSubject, &p.SessionSource, &p.SessionID, &p.SessionTitle); err != nil {
 			return nil, fmt.Errorf("scan page: %w", err)
 		}
 		p.CreatedAt = time.Unix(createdAt, 0).UTC()
