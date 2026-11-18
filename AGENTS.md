@@ -262,6 +262,14 @@ Rows predating the column have `owner_subject = ''` and are matched on their
 `created_by` label instead (`ownerClause` in `internal/store/sqlite.go`). There
 is no backfill: `created_by` is not a stable key.
 
+Pages also carry an optional agent session (`session_source`, `session_id`,
+`session_title`) that the dashboard groups by. These are **labels, not access
+control**: owner scope stays the only boundary, and a session filter is always
+ANDed onto `ownerClause`, never a replacement for it. The server validates
+them in `internal/server/session.go` (source allowlist, id charset); the CLI's
+detection precedence lives in `internal/client/session.go`. Titles reach the
+SPA as text nodes only.
+
 ## Commits
 
 Use the [Conventional Commits](https://www.conventionalcommits.org/) format

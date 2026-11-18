@@ -24,6 +24,19 @@ type Page struct {
 	// OwnerSubject is the stable IdP subject that owns the page. Rows written
 	// before the owner column existed have it empty; see Owner.
 	OwnerSubject string
+	// SessionSource, SessionID and SessionTitle label the agent session that
+	// produced the page. All empty means ungrouped. They are labels, not
+	// access control: ownership is still the only scope.
+	SessionSource string
+	SessionID     string
+	SessionTitle  string
+}
+
+// PageFilter narrows ListPagesByOwner. The zero value matches everything.
+type PageFilter struct {
+	// SessionSource and SessionID must both be set to filter by session.
+	SessionSource string
+	SessionID     string
 }
 
 // Token is a CLI API token. Only the hash of the secret half is ever stored,
@@ -70,8 +83,8 @@ type Store interface {
 	// Only page serving may use it: every API path is owner-scoped.
 	GetPage(ctx context.Context, id string) (Page, error)
 	// ListPagesByOwner returns metadata for the owner's pages, newest first.
-	// Content is nil.
-	ListPagesByOwner(ctx context.Context, o Owner) ([]Page, error)
+	// Content is nil. The zero PageFilter applies no filtering.
+	ListPagesByOwner(ctx context.Context, o Owner, f PageFilter) ([]Page, error)
 	// GetPageForOwner returns the full page if o owns it, else ErrNotFound.
 	GetPageForOwner(ctx context.Context, id string, o Owner) (Page, error)
 	DeletePageForOwner(ctx context.Context, id string, o Owner) error

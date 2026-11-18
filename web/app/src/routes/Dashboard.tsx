@@ -1,6 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Link2, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  Link2,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { dashboardClient } from "@/hooks/session";
@@ -16,6 +22,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import type { PageMeta } from "@/gen/pagereport/v1/pagereport_pb";
+import { groupPages, sourceLabel, type GroupEntry } from "@/lib/group";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -36,6 +45,21 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const pagesKey = ["pages"] as const;
+const expandedKey = "pr.expandedSessions";
+
+/** null means "nothing stored": the caller picks the default. */
+function loadExpanded(): Set<string> | null {
+  try {
+    const raw = localStorage.getItem(expandedKey);
+    if (raw === null) return null;
+    const v: unknown = JSON.parse(raw);
+    return Array.isArray(v)
+      ? new Set(v.filter((x): x is string => typeof x === "string"))
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 export function Dashboard() {
   const queryClient = useQueryClient();
@@ -59,7 +83,27 @@ export function Dashboard() {
     onError: (err) => toast.error(errorMessage(err)),
   });
 
-  const pages = data?.pages ?? [];
+  const entries = useMemo(() => groupPages(data?.pages ?? []), [data]);
+  const [stored, setStored] = useState(loadExpanded);
+  // Until the user toggles something, the newest group is open.
+  const expanded = useMemo(() => {
+    if (stored) return stored;
+    const first = entries.find((e) => e.kind === "group");
+    return new Set(first ? [first.key] : []);
+  }, [stored, entries]);
+
+  const toggle = (key: string) => {
+    const next = new Set(expanded);
+    if (!next.delete(key)) next.add(key);
+    setStored(next);
+    try {
+      localStorage.setItem(expandedKey, JSON.stringify([...next]));
+    } catch {
+      // storage unavailable: state still works for this visit
+    }
+  };
+  const askDelete = (p: PageMeta) =>
+    setPendingDelete({ id: p.id, title: p.title || p.id });
 
   return (
     <div className="space-y-6">
@@ -86,7 +130,7 @@ export function Dashboard() {
               <EmptyDescription>{errorMessage(error)}</EmptyDescription>
             </EmptyHeader>
           </Empty>
-        ) : pages.length === 0 ? (
+        ) : entries.length === 0 ? (
           <Empty>
             <EmptyHeader>
               <EmptyTitle>No reports yet</EmptyTitle>
@@ -110,59 +154,24 @@ export function Dashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pages.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell>
-                    <div className="font-medium">{p.title || "Untitled"}</div>
-                    <div className="text-[0.625rem] text-muted-foreground">
-                      {p.id}
-                    </div>
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
-                    <span title={absolute(p.createdAt)}>
-                      {relative(p.createdAt)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {bytes(p.sizeBytes)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end gap-1">
-                      {/*
-                        Reports open as top-level documents, never inside this
-                        app: the sandbox that keeps them inert depends on it.
-                      */}
-                      <IconAction
-                        label="Open report"
-                        onClick={() => window.open(p.url, "_blank", "noopener")}
-                      >
-                        <ExternalLink />
-                      </IconAction>
-                      <IconAction
-                        label="Copy link"
-                        onClick={() => {
-                          navigator.clipboard.writeText(p.url);
-                          toast.success("Link copied");
-                        }}
-                      >
-                        <Link2 />
-                      </IconAction>
-                      <IconAction
-                        label="Delete report"
-                        className="hover:text-destructive"
-                        onClick={() =>
-                          setPendingDelete({
-                            id: p.id,
-                            title: p.title || p.id,
-                          })
-                        }
-                      >
-                        <Trash2 />
-                      </IconAction>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {entries.map((e) =>
+                e.kind === "page" ? (
+                  <PageRow
+                    key={e.page.id}
+                    page={e.page}
+                    showBadge
+                    onDelete={askDelete}
+                  />
+                ) : (
+                  <GroupRows
+                    key={e.key}
+                    group={e}
+                    expanded={expanded.has(e.key)}
+                    onToggle={() => toggle(e.key)}
+                    onDelete={askDelete}
+                  />
+                ),
+              )}
             </TableBody>
           </Table>
         )}
@@ -227,5 +236,143 @@ function IconAction({
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
+  );
+}
+
+function SessionBadge({ source }: { source: string }) {
+  return (
+    <Badge variant="secondary" className="font-normal">
+      {sourceLabel(source)}
+    </Badge>
+  );
+}
+
+/** One report row. `indent` marks a child row inside an expanded group. */
+function PageRow({
+  page: p,
+  indent,
+  showBadge,
+  onDelete,
+}: {
+  page: PageMeta;
+  indent?: boolean;
+  showBadge?: boolean;
+  onDelete: (p: PageMeta) => void;
+}) {
+  return (
+    <TableRow>
+      <TableCell className={indent ? "pl-9" : undefined}>
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{p.title || "Untitled"}</span>
+          {showBadge && p.session?.id ? (
+            <SessionBadge source={p.session.source} />
+          ) : null}
+        </div>
+        <div className="text-[0.625rem] text-muted-foreground">{p.id}</div>
+      </TableCell>
+      <TableCell className="whitespace-nowrap text-muted-foreground">
+        <span title={absolute(p.createdAt)}>{relative(p.createdAt)}</span>
+      </TableCell>
+      <TableCell className="whitespace-nowrap text-muted-foreground">
+        {bytes(p.sizeBytes)}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center justify-end gap-1">
+          {/*
+            Reports open as top-level documents, never inside this
+            app: the sandbox that keeps them inert depends on it.
+          */}
+          <IconAction
+            label="Open report"
+            onClick={() => window.open(p.url, "_blank", "noopener")}
+          >
+            <ExternalLink />
+          </IconAction>
+          <IconAction
+            label="Copy link"
+            onClick={() => {
+              navigator.clipboard.writeText(p.url);
+              toast.success("Link copied");
+            }}
+          >
+            <Link2 />
+          </IconAction>
+          <IconAction
+            label="Delete report"
+            className="hover:text-destructive"
+            onClick={() => onDelete(p)}
+          >
+            <Trash2 />
+          </IconAction>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+/** Header row for a session group, followed by its reports when expanded. */
+function GroupRows({
+  group,
+  expanded,
+  onToggle,
+  onDelete,
+}: {
+  group: GroupEntry;
+  expanded: boolean;
+  onToggle: () => void;
+  onDelete: (p: PageMeta) => void;
+}) {
+  const title = group.title || `${sourceLabel(group.source)} session`;
+  return (
+    <>
+      <TableRow className="bg-muted/30">
+        <TableCell>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-expanded={expanded}
+              aria-label={`${expanded ? "Collapse" : "Expand"} ${title}`}
+              onClick={onToggle}
+            >
+              {expanded ? <ChevronDown /> : <ChevronRight />}
+            </Button>
+            <span className="font-medium">{title}</span>
+            <SessionBadge source={group.source} />
+            <span className="text-muted-foreground">
+              {group.pages.length} reports
+            </span>
+          </div>
+        </TableCell>
+        <TableCell className="whitespace-nowrap text-muted-foreground">
+          <span title={absolute(group.latestAt)}>
+            {relative(group.latestAt)}
+          </span>
+        </TableCell>
+        <TableCell className="whitespace-nowrap text-muted-foreground">
+          {bytes(group.totalBytes)}
+        </TableCell>
+        <TableCell>
+          <div className="flex items-center justify-end gap-1">
+            <IconAction
+              label="Copy all links"
+              onClick={() => {
+                navigator.clipboard.writeText(
+                  group.pages.map((p) => p.url).join("\n"),
+                );
+                toast.success(`${group.pages.length} links copied`);
+              }}
+            >
+              <Link2 />
+            </IconAction>
+          </div>
+        </TableCell>
+      </TableRow>
+      {expanded
+        ? group.pages.map((p) => (
+            <PageRow key={p.id} page={p} indent onDelete={onDelete} />
+          ))
+        : null}
+    </>
   );
 }

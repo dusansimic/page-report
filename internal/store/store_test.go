@@ -50,7 +50,7 @@ func TestSQLiteStoreLifecycle(t *testing.T) {
 		t.Fatalf("missing page: got %v", err)
 	}
 
-	list, err := s.ListPagesByOwner(ctx, alice)
+	list, err := s.ListPagesByOwner(ctx, alice, PageFilter{})
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list: %v, %d entries", err, len(list))
 	}
@@ -85,7 +85,7 @@ func TestPageOwnerIsolation(t *testing.T) {
 	mk("alice-1", alice)
 	mk("bob-1", bob)
 
-	list, err := s.ListPagesByOwner(ctx, alice)
+	list, err := s.ListPagesByOwner(ctx, alice, PageFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestLegacyPagesMatchOnCreatedBy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	list, err := s.ListPagesByOwner(ctx, alice)
+	list, err := s.ListPagesByOwner(ctx, alice, PageFilter{})
 	if err != nil || len(list) != 1 {
 		t.Fatalf("legacy page not visible to its creator: %v, %+v", err, list)
 	}
@@ -275,8 +275,68 @@ func TestMigrateFromV1(t *testing.T) {
 	if p.OwnerSubject != "" {
 		t.Errorf("migrated row must have empty owner_subject, got %q", p.OwnerSubject)
 	}
-	list, err := s.ListPagesByOwner(ctx, alice)
+	if p.SessionSource != "" || p.SessionID != "" || p.SessionTitle != "" {
+		t.Errorf("legacy row must scan with empty session, got %+v", p)
+	}
+	list, err := s.ListPagesByOwner(ctx, alice, PageFilter{})
 	if err != nil || len(list) != 1 {
 		t.Fatalf("migrated row unreachable by its creator: %v, %+v", err, list)
+	}
+}
+
+func TestPageSessionRoundTripAndFilter(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Second)
+
+	mk := func(id, owner, src, sid, title string) Page {
+		return Page{
+			ID: id, Content: []byte("x"), ContentType: "text/html; charset=utf-8",
+			SizeBytes: 1, CreatedAt: now, CreatedBy: owner + "@example.org",
+			OwnerSubject:  "sub-" + owner,
+			SessionSource: src, SessionID: sid, SessionTitle: title,
+		}
+	}
+	for _, p := range []Page{
+		mk("a1", "alice", "t3code", "thread-1", "My thread"),
+		mk("a2", "alice", "t3code", "thread-1", "My thread"),
+		mk("a3", "alice", "t3code", "thread-2", ""),
+		mk("a4", "alice", "claude-code", "thread-1", ""),
+		mk("a5", "alice", "", "", ""),
+		mk("b1", "bob", "t3code", "thread-1", "Bob's"),
+	} {
+		if err := s.CreatePage(ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := s.GetPage(ctx, "a1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SessionSource != "t3code" || got.SessionID != "thread-1" || got.SessionTitle != "My thread" {
+		t.Fatalf("GetPage round-trip: %+v", got)
+	}
+	got, err = s.GetPageForOwner(ctx, "a1", alice)
+	if err != nil || got.SessionID != "thread-1" {
+		t.Fatalf("GetPageForOwner round-trip: %v, %+v", err, got)
+	}
+
+	all, err := s.ListPagesByOwner(ctx, alice, PageFilter{})
+	if err != nil || len(all) != 5 {
+		t.Fatalf("unfiltered list: %v, %d", err, len(all))
+	}
+	filtered, err := s.ListPagesByOwner(ctx, alice,
+		PageFilter{SessionSource: "t3code", SessionID: "thread-1"})
+	if err != nil || len(filtered) != 2 {
+		t.Fatalf("filtered list: %v, %d", err, len(filtered))
+	}
+	for _, p := range filtered {
+		if p.SessionSource != "t3code" || p.SessionID != "thread-1" || p.SessionTitle != "My thread" {
+			t.Errorf("filter leaked %+v", p)
+		}
+		if p.OwnerSubject != alice.Subject {
+			t.Errorf("filter leaked another owner's page: %+v", p)
+		}
 	}
 }

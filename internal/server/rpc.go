@@ -66,6 +66,10 @@ func (r *rpcService) UploadPage(
 		}
 		contentType = canonical
 	}
+	sessSource, sessID, sessTitle, err := validateSession(req.Msg.GetSession())
+	if err != nil {
+		return nil, err
+	}
 	identity, _ := IdentityFrom(ctx)
 	createdBy := identity.Email
 	if createdBy == "" {
@@ -90,6 +94,10 @@ func (r *rpcService) UploadPage(
 			CreatedAt:    time.Now().UTC(),
 			CreatedBy:    createdBy,
 			OwnerSubject: identity.Subject,
+
+			SessionSource: sessSource,
+			SessionID:     sessID,
+			SessionTitle:  sessTitle,
 		})
 		if err == nil {
 			pageID = newID
@@ -109,9 +117,17 @@ func (r *rpcService) UploadPage(
 
 func (r *rpcService) ListPages(
 	ctx context.Context,
-	_ *connect.Request[pagereportv1.ListPagesRequest],
+	req *connect.Request[pagereportv1.ListPagesRequest],
 ) (*connect.Response[pagereportv1.ListPagesResponse], error) {
-	pages, err := r.s.store.ListPagesByOwner(ctx, OwnerFrom(ctx))
+	var filter store.PageFilter
+	if req.Msg.GetSession() != nil {
+		src, sid, _, err := validateSession(req.Msg.GetSession())
+		if err != nil {
+			return nil, err
+		}
+		filter = store.PageFilter{SessionSource: src, SessionID: sid}
+	}
+	pages, err := r.s.store.ListPagesByOwner(ctx, OwnerFrom(ctx), filter)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -174,7 +190,7 @@ func (r *rpcService) PrunePages(
 // pageMeta is shared by both services so the CLI and the dashboard describe a
 // page identically.
 func (s *Server) pageMeta(p store.Page) *pagereportv1.PageMeta {
-	return &pagereportv1.PageMeta{
+	meta := &pagereportv1.PageMeta{
 		Id:          p.ID,
 		Title:       p.Title,
 		ContentType: p.ContentType,
@@ -183,4 +199,12 @@ func (s *Server) pageMeta(p store.Page) *pagereportv1.PageMeta {
 		CreatedBy:   p.CreatedBy,
 		Url:         s.cfg.PageURL(p.ID),
 	}
+	if p.SessionID != "" {
+		meta.Session = &pagereportv1.Session{
+			Source: p.SessionSource,
+			Id:     p.SessionID,
+			Title:  p.SessionTitle,
+		}
+	}
+	return meta
 }

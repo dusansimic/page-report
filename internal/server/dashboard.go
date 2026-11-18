@@ -135,7 +135,7 @@ func (d *dashboardService) ListPages(
 	if _, err := requireSession(ctx); err != nil {
 		return nil, err
 	}
-	pages, err := d.s.store.ListPagesByOwner(ctx, OwnerFrom(ctx))
+	pages, err := d.s.store.ListPagesByOwner(ctx, OwnerFrom(ctx), store.PageFilter{})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

@@ -242,7 +242,9 @@ type PageMeta struct {
 	CreatedAt int64  `protobuf:"varint,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	CreatedBy string `protobuf:"bytes,6,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
 	// Full URL where the page is served.
-	Url           string `protobuf:"bytes,7,opt,name=url,proto3" json:"url,omitempty"`
+	Url string `protobuf:"bytes,7,opt,name=url,proto3" json:"url,omitempty"`
+	// Agent session the page was uploaded from. Unset when none was detected.
+	Session       *Session `protobuf:"bytes,8,opt,name=session,proto3" json:"session,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -326,6 +328,79 @@ func (x *PageMeta) GetUrl() string {
 	return ""
 }
 
+func (x *PageMeta) GetSession() *Session {
+	if x != nil {
+		return x.Session
+	}
+	return nil
+}
+
+// Session groups pages produced by one agent session or thread. The server
+// treats it as an opaque label: it is validated and stored, never used for
+// access control (ownership still is).
+type Session struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// One of "t3code", "claude-code", "codex", "opencode" or "manual".
+	Source string `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	// Opaque id from the source, 1-128 bytes of [A-Za-z0-9._:-].
+	Id string `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	// Human title as known at upload time; may be empty.
+	Title         string `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Session) Reset() {
+	*x = Session{}
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Session) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Session) ProtoMessage() {}
+
+func (x *Session) ProtoReflect() protoreflect.Message {
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Session.ProtoReflect.Descriptor instead.
+func (*Session) Descriptor() ([]byte, []int) {
+	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *Session) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *Session) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Session) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
 type UploadPageRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Raw HTML bytes (base64 in JSON encoding).
@@ -334,14 +409,16 @@ type UploadPageRequest struct {
 	// Only "text/html" and "text/plain" are accepted; parameters are ignored
 	// and the value is stored canonicalised with charset=utf-8. Anything else is
 	// rejected with INVALID_ARGUMENT. Defaults to "text/html; charset=utf-8".
-	ContentType   string `protobuf:"bytes,3,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	ContentType string `protobuf:"bytes,3,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	// Optional agent session to group this page under.
+	Session       *Session `protobuf:"bytes,4,opt,name=session,proto3" json:"session,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UploadPageRequest) Reset() {
 	*x = UploadPageRequest{}
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[5]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -353,7 +430,7 @@ func (x *UploadPageRequest) String() string {
 func (*UploadPageRequest) ProtoMessage() {}
 
 func (x *UploadPageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[5]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -366,7 +443,7 @@ func (x *UploadPageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadPageRequest.ProtoReflect.Descriptor instead.
 func (*UploadPageRequest) Descriptor() ([]byte, []int) {
-	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{5}
+	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *UploadPageRequest) GetContent() []byte {
@@ -390,6 +467,13 @@ func (x *UploadPageRequest) GetContentType() string {
 	return ""
 }
 
+func (x *UploadPageRequest) GetSession() *Session {
+	if x != nil {
+		return x.Session
+	}
+	return nil
+}
+
 type UploadPageResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -400,7 +484,7 @@ type UploadPageResponse struct {
 
 func (x *UploadPageResponse) Reset() {
 	*x = UploadPageResponse{}
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[6]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -412,7 +496,7 @@ func (x *UploadPageResponse) String() string {
 func (*UploadPageResponse) ProtoMessage() {}
 
 func (x *UploadPageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[6]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -425,7 +509,7 @@ func (x *UploadPageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadPageResponse.ProtoReflect.Descriptor instead.
 func (*UploadPageResponse) Descriptor() ([]byte, []int) {
-	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{6}
+	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *UploadPageResponse) GetId() string {
@@ -443,14 +527,16 @@ func (x *UploadPageResponse) GetUrl() string {
 }
 
 type ListPagesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Optional filter: only pages of this session (source and id must match).
+	Session       *Session `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListPagesRequest) Reset() {
 	*x = ListPagesRequest{}
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[7]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -462,7 +548,7 @@ func (x *ListPagesRequest) String() string {
 func (*ListPagesRequest) ProtoMessage() {}
 
 func (x *ListPagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[7]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -475,7 +561,14 @@ func (x *ListPagesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPagesRequest.ProtoReflect.Descriptor instead.
 func (*ListPagesRequest) Descriptor() ([]byte, []int) {
-	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{7}
+	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ListPagesRequest) GetSession() *Session {
+	if x != nil {
+		return x.Session
+	}
+	return nil
 }
 
 type ListPagesResponse struct {
@@ -487,7 +580,7 @@ type ListPagesResponse struct {
 
 func (x *ListPagesResponse) Reset() {
 	*x = ListPagesResponse{}
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[8]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -499,7 +592,7 @@ func (x *ListPagesResponse) String() string {
 func (*ListPagesResponse) ProtoMessage() {}
 
 func (x *ListPagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[8]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -512,7 +605,7 @@ func (x *ListPagesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPagesResponse.ProtoReflect.Descriptor instead.
 func (*ListPagesResponse) Descriptor() ([]byte, []int) {
-	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{8}
+	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListPagesResponse) GetPages() []*PageMeta {
@@ -533,7 +626,7 @@ type GetPageRequest struct {
 
 func (x *GetPageRequest) Reset() {
 	*x = GetPageRequest{}
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[9]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -545,7 +638,7 @@ func (x *GetPageRequest) String() string {
 func (*GetPageRequest) ProtoMessage() {}
 
 func (x *GetPageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[9]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -558,7 +651,7 @@ func (x *GetPageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPageRequest.ProtoReflect.Descriptor instead.
 func (*GetPageRequest) Descriptor() ([]byte, []int) {
-	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{9}
+	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GetPageRequest) GetId() string {
@@ -585,7 +678,7 @@ type GetPageResponse struct {
 
 func (x *GetPageResponse) Reset() {
 	*x = GetPageResponse{}
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[10]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -597,7 +690,7 @@ func (x *GetPageResponse) String() string {
 func (*GetPageResponse) ProtoMessage() {}
 
 func (x *GetPageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[10]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -610,7 +703,7 @@ func (x *GetPageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPageResponse.ProtoReflect.Descriptor instead.
 func (*GetPageResponse) Descriptor() ([]byte, []int) {
-	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{10}
+	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GetPageResponse) GetMeta() *PageMeta {
@@ -636,7 +729,7 @@ type DeletePageRequest struct {
 
 func (x *DeletePageRequest) Reset() {
 	*x = DeletePageRequest{}
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[11]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -648,7 +741,7 @@ func (x *DeletePageRequest) String() string {
 func (*DeletePageRequest) ProtoMessage() {}
 
 func (x *DeletePageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[11]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -661,7 +754,7 @@ func (x *DeletePageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletePageRequest.ProtoReflect.Descriptor instead.
 func (*DeletePageRequest) Descriptor() ([]byte, []int) {
-	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{11}
+	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *DeletePageRequest) GetId() string {
@@ -679,7 +772,7 @@ type DeletePageResponse struct {
 
 func (x *DeletePageResponse) Reset() {
 	*x = DeletePageResponse{}
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[12]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -691,7 +784,7 @@ func (x *DeletePageResponse) String() string {
 func (*DeletePageResponse) ProtoMessage() {}
 
 func (x *DeletePageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[12]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -704,7 +797,7 @@ func (x *DeletePageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletePageResponse.ProtoReflect.Descriptor instead.
 func (*DeletePageResponse) Descriptor() ([]byte, []int) {
-	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{12}
+	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{13}
 }
 
 type PrunePagesRequest struct {
@@ -717,7 +810,7 @@ type PrunePagesRequest struct {
 
 func (x *PrunePagesRequest) Reset() {
 	*x = PrunePagesRequest{}
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[13]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -729,7 +822,7 @@ func (x *PrunePagesRequest) String() string {
 func (*PrunePagesRequest) ProtoMessage() {}
 
 func (x *PrunePagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[13]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -742,7 +835,7 @@ func (x *PrunePagesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrunePagesRequest.ProtoReflect.Descriptor instead.
 func (*PrunePagesRequest) Descriptor() ([]byte, []int) {
-	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{13}
+	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PrunePagesRequest) GetOlderThanSeconds() int64 {
@@ -761,7 +854,7 @@ type PrunePagesResponse struct {
 
 func (x *PrunePagesResponse) Reset() {
 	*x = PrunePagesResponse{}
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[14]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -773,7 +866,7 @@ func (x *PrunePagesResponse) String() string {
 func (*PrunePagesResponse) ProtoMessage() {}
 
 func (x *PrunePagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pagereport_v1_pagereport_proto_msgTypes[14]
+	mi := &file_pagereport_v1_pagereport_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -786,7 +879,7 @@ func (x *PrunePagesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrunePagesResponse.ProtoReflect.Descriptor instead.
 func (*PrunePagesResponse) Descriptor() ([]byte, []int) {
-	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{14}
+	return file_pagereport_v1_pagereport_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PrunePagesResponse) GetDeletedCount() int64 {
@@ -814,7 +907,7 @@ const file_pagereport_v1_pagereport_proto_rawDesc = "" +
 	"\x05login\x18\x03 \x01(\tR\x05login\x12\x19\n" +
 	"\btoken_id\x18\x04 \x01(\tR\atokenId\x12\x1d\n" +
 	"\n" +
-	"token_name\x18\x05 \x01(\tR\ttokenName\"\xc2\x01\n" +
+	"token_name\x18\x05 \x01(\tR\ttokenName\"\xf4\x01\n" +
 	"\bPageMeta\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12!\n" +
@@ -825,15 +918,22 @@ const file_pagereport_v1_pagereport_proto_rawDesc = "" +
 	"created_at\x18\x05 \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"created_by\x18\x06 \x01(\tR\tcreatedBy\x12\x10\n" +
-	"\x03url\x18\a \x01(\tR\x03url\"f\n" +
+	"\x03url\x18\a \x01(\tR\x03url\x120\n" +
+	"\asession\x18\b \x01(\v2\x16.pagereport.v1.SessionR\asession\"G\n" +
+	"\aSession\x12\x16\n" +
+	"\x06source\x18\x01 \x01(\tR\x06source\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\x12\x14\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\"\x98\x01\n" +
 	"\x11UploadPageRequest\x12\x18\n" +
 	"\acontent\x18\x01 \x01(\fR\acontent\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12!\n" +
-	"\fcontent_type\x18\x03 \x01(\tR\vcontentType\"6\n" +
+	"\fcontent_type\x18\x03 \x01(\tR\vcontentType\x120\n" +
+	"\asession\x18\x04 \x01(\v2\x16.pagereport.v1.SessionR\asession\"6\n" +
 	"\x12UploadPageResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
-	"\x03url\x18\x02 \x01(\tR\x03url\"\x12\n" +
-	"\x10ListPagesRequest\"B\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\"D\n" +
+	"\x10ListPagesRequest\x120\n" +
+	"\asession\x18\x01 \x01(\v2\x16.pagereport.v1.SessionR\asession\"B\n" +
 	"\x11ListPagesResponse\x12-\n" +
 	"\x05pages\x18\x01 \x03(\v2\x17.pagereport.v1.PageMetaR\x05pages\"I\n" +
 	"\x0eGetPageRequest\x12\x0e\n" +
@@ -873,46 +973,50 @@ func file_pagereport_v1_pagereport_proto_rawDescGZIP() []byte {
 	return file_pagereport_v1_pagereport_proto_rawDescData
 }
 
-var file_pagereport_v1_pagereport_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_pagereport_v1_pagereport_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_pagereport_v1_pagereport_proto_goTypes = []any{
 	(*GetServerInfoRequest)(nil),  // 0: pagereport.v1.GetServerInfoRequest
 	(*GetServerInfoResponse)(nil), // 1: pagereport.v1.GetServerInfoResponse
 	(*WhoAmIRequest)(nil),         // 2: pagereport.v1.WhoAmIRequest
 	(*WhoAmIResponse)(nil),        // 3: pagereport.v1.WhoAmIResponse
 	(*PageMeta)(nil),              // 4: pagereport.v1.PageMeta
-	(*UploadPageRequest)(nil),     // 5: pagereport.v1.UploadPageRequest
-	(*UploadPageResponse)(nil),    // 6: pagereport.v1.UploadPageResponse
-	(*ListPagesRequest)(nil),      // 7: pagereport.v1.ListPagesRequest
-	(*ListPagesResponse)(nil),     // 8: pagereport.v1.ListPagesResponse
-	(*GetPageRequest)(nil),        // 9: pagereport.v1.GetPageRequest
-	(*GetPageResponse)(nil),       // 10: pagereport.v1.GetPageResponse
-	(*DeletePageRequest)(nil),     // 11: pagereport.v1.DeletePageRequest
-	(*DeletePageResponse)(nil),    // 12: pagereport.v1.DeletePageResponse
-	(*PrunePagesRequest)(nil),     // 13: pagereport.v1.PrunePagesRequest
-	(*PrunePagesResponse)(nil),    // 14: pagereport.v1.PrunePagesResponse
+	(*Session)(nil),               // 5: pagereport.v1.Session
+	(*UploadPageRequest)(nil),     // 6: pagereport.v1.UploadPageRequest
+	(*UploadPageResponse)(nil),    // 7: pagereport.v1.UploadPageResponse
+	(*ListPagesRequest)(nil),      // 8: pagereport.v1.ListPagesRequest
+	(*ListPagesResponse)(nil),     // 9: pagereport.v1.ListPagesResponse
+	(*GetPageRequest)(nil),        // 10: pagereport.v1.GetPageRequest
+	(*GetPageResponse)(nil),       // 11: pagereport.v1.GetPageResponse
+	(*DeletePageRequest)(nil),     // 12: pagereport.v1.DeletePageRequest
+	(*DeletePageResponse)(nil),    // 13: pagereport.v1.DeletePageResponse
+	(*PrunePagesRequest)(nil),     // 14: pagereport.v1.PrunePagesRequest
+	(*PrunePagesResponse)(nil),    // 15: pagereport.v1.PrunePagesResponse
 }
 var file_pagereport_v1_pagereport_proto_depIdxs = []int32{
-	4,  // 0: pagereport.v1.ListPagesResponse.pages:type_name -> pagereport.v1.PageMeta
-	4,  // 1: pagereport.v1.GetPageResponse.meta:type_name -> pagereport.v1.PageMeta
-	0,  // 2: pagereport.v1.PageService.GetServerInfo:input_type -> pagereport.v1.GetServerInfoRequest
-	2,  // 3: pagereport.v1.PageService.WhoAmI:input_type -> pagereport.v1.WhoAmIRequest
-	5,  // 4: pagereport.v1.PageService.UploadPage:input_type -> pagereport.v1.UploadPageRequest
-	7,  // 5: pagereport.v1.PageService.ListPages:input_type -> pagereport.v1.ListPagesRequest
-	9,  // 6: pagereport.v1.PageService.GetPage:input_type -> pagereport.v1.GetPageRequest
-	11, // 7: pagereport.v1.PageService.DeletePage:input_type -> pagereport.v1.DeletePageRequest
-	13, // 8: pagereport.v1.PageService.PrunePages:input_type -> pagereport.v1.PrunePagesRequest
-	1,  // 9: pagereport.v1.PageService.GetServerInfo:output_type -> pagereport.v1.GetServerInfoResponse
-	3,  // 10: pagereport.v1.PageService.WhoAmI:output_type -> pagereport.v1.WhoAmIResponse
-	6,  // 11: pagereport.v1.PageService.UploadPage:output_type -> pagereport.v1.UploadPageResponse
-	8,  // 12: pagereport.v1.PageService.ListPages:output_type -> pagereport.v1.ListPagesResponse
-	10, // 13: pagereport.v1.PageService.GetPage:output_type -> pagereport.v1.GetPageResponse
-	12, // 14: pagereport.v1.PageService.DeletePage:output_type -> pagereport.v1.DeletePageResponse
-	14, // 15: pagereport.v1.PageService.PrunePages:output_type -> pagereport.v1.PrunePagesResponse
-	9,  // [9:16] is the sub-list for method output_type
-	2,  // [2:9] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	5,  // 0: pagereport.v1.PageMeta.session:type_name -> pagereport.v1.Session
+	5,  // 1: pagereport.v1.UploadPageRequest.session:type_name -> pagereport.v1.Session
+	5,  // 2: pagereport.v1.ListPagesRequest.session:type_name -> pagereport.v1.Session
+	4,  // 3: pagereport.v1.ListPagesResponse.pages:type_name -> pagereport.v1.PageMeta
+	4,  // 4: pagereport.v1.GetPageResponse.meta:type_name -> pagereport.v1.PageMeta
+	0,  // 5: pagereport.v1.PageService.GetServerInfo:input_type -> pagereport.v1.GetServerInfoRequest
+	2,  // 6: pagereport.v1.PageService.WhoAmI:input_type -> pagereport.v1.WhoAmIRequest
+	6,  // 7: pagereport.v1.PageService.UploadPage:input_type -> pagereport.v1.UploadPageRequest
+	8,  // 8: pagereport.v1.PageService.ListPages:input_type -> pagereport.v1.ListPagesRequest
+	10, // 9: pagereport.v1.PageService.GetPage:input_type -> pagereport.v1.GetPageRequest
+	12, // 10: pagereport.v1.PageService.DeletePage:input_type -> pagereport.v1.DeletePageRequest
+	14, // 11: pagereport.v1.PageService.PrunePages:input_type -> pagereport.v1.PrunePagesRequest
+	1,  // 12: pagereport.v1.PageService.GetServerInfo:output_type -> pagereport.v1.GetServerInfoResponse
+	3,  // 13: pagereport.v1.PageService.WhoAmI:output_type -> pagereport.v1.WhoAmIResponse
+	7,  // 14: pagereport.v1.PageService.UploadPage:output_type -> pagereport.v1.UploadPageResponse
+	9,  // 15: pagereport.v1.PageService.ListPages:output_type -> pagereport.v1.ListPagesResponse
+	11, // 16: pagereport.v1.PageService.GetPage:output_type -> pagereport.v1.GetPageResponse
+	13, // 17: pagereport.v1.PageService.DeletePage:output_type -> pagereport.v1.DeletePageResponse
+	15, // 18: pagereport.v1.PageService.PrunePages:output_type -> pagereport.v1.PrunePagesResponse
+	12, // [12:19] is the sub-list for method output_type
+	5,  // [5:12] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_pagereport_v1_pagereport_proto_init() }
@@ -926,7 +1030,7 @@ func file_pagereport_v1_pagereport_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pagereport_v1_pagereport_proto_rawDesc), len(file_pagereport_v1_pagereport_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
