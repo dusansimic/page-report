@@ -107,6 +107,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -188,3 +190,23 @@ jobs:
       # The sha tag is the one tag every channel publishes.
       - name: Inspect
         run: docker buildx imagetools inspect "${IMAGE}:sha-${{ github.sha }}"
+
+      # Digest of the manifest list itself (not a per-arch image), which is
+      # what every tag resolves to and so what the attestation must name.
+      - id: manifest
+        name: Resolve manifest digest
+        run: |
+          set -eu
+          digest="$(docker buildx imagetools inspect "${IMAGE}:sha-${{ github.sha }}" \
+            --format '{{json .Manifest}}' | jq -r .digest)"
+          case "$digest" in
+            sha256:*) ;;
+            *) echo "::error::unexpected manifest digest '$digest'"; exit 1 ;;
+          esac
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.manifest.outputs.digest }}
+          push-to-registry: true

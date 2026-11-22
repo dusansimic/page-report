@@ -47,7 +47,11 @@ latest_tag() {
 		"https://github.com/${REPO}/releases/latest")
 	tag=${url##*/}
 	case "$tag" in
-	'' | latest) die "could not determine the latest release of $REPO" ;;
+	'' | latest | releases) die "no stable release of $REPO yet; set PR_VERSION to install a specific (pre)release tag" ;;
+	esac
+	case "$tag" in
+	v[0-9]*) ;;
+	*) die "unexpected release tag '$tag'" ;;
 	esac
 	printf '%s\n' "$tag"
 }
