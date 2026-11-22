@@ -78,6 +78,14 @@ Two entry points over three reusable workflows. The `_`-prefixed ones are
 | `_build-cli.yml` | reusable | 4× `GOOS`/`GOARCH` matrix, uploads artifacts. |
 | `_build-image.yml` | reusable | one native runner per arch, by-digest push, merge job builds the manifest list. |
 
+Maintainer procedure (tagging, prereleases, bad releases, one-time repo
+settings) is in README "Releasing". Never move, delete-and-recreate or reuse a
+published `v*` tag. `github-release` `needs` `image`, so the Release is the last
+write and its existence implies the image is pushed. Build provenance
+attestations need `id-token: write` + `attestations: write`: on the
+`github-release` job (CLI tarballs) and on every caller of `_build-image.yml`,
+since a reusable workflow cannot exceed its caller's permissions.
+
 Four invariants:
 
 - **Builds always `needs: verify`.** A reusable-workflow call is a single node

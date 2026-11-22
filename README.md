@@ -115,6 +115,16 @@ uploaded as `page-report-<os>-<arch>` artifacts on every [CI][ci] run.
 [releases]: https://github.com/dusansimic/page-report/releases
 [ci]: https://github.com/dusansimic/page-report/actions/workflows/ci.yml
 
+**Verify.** Release tarballs and the container image carry GitHub build
+provenance attestations, and the Linux CLI binaries are statically linked
+(CGO disabled). The installer only picks stable releases; set `PR_VERSION` to
+install a prerelease.
+
+```sh
+gh attestation verify page-report_vX.Y.Z_linux_amd64.tar.gz --repo dusansimic/page-report
+gh attestation verify oci://ghcr.io/dusansimic/page-report:vX.Y.Z --repo dusansimic/page-report
+```
+
 ### Updating
 
 ```sh
@@ -329,6 +339,49 @@ Then `mprocs` (config in `mprocs.yaml`) runs both processes; open
 `http://localhost:5173`.
 
 See `AGENTS.md` for conventions (package boundaries, migrations, config).
+
+## Releasing
+
+```sh
+git switch main && git pull --ff-only
+# CI on this commit must already be green
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+gh run watch "$(gh run list -w Release -L1 --json databaseId -q '.[0].databaseId')"
+gh release view v0.1.0
+```
+
+Versions are semver with a mandatory `v` prefix; `release.yml` rejects any
+other tag. A `-rc.N` / `-beta.N` suffix makes a prerelease: the GitHub Release
+is marked as such, the image gets only its exact version and `sha-<sha>` tags,
+and neither `install.sh` nor `page-report update` offers it. Cut an `-rc.1`
+before the first release of each minor.
+
+A release publishes four CLI tarballs, `checksums.txt`, build provenance
+attestations for the tarballs and the image, and the image tags listed under
+[Container image](#container-image). The GitHub Release is created last, once
+the image is pushed, so a visible Release means everything is available. Its
+notes are generated from merged PR titles, so keep those in Conventional Commit
+form.
+
+Re-run a release for an existing tag (idempotent):
+
+```sh
+gh workflow run release.yml -f tag=v0.1.0
+```
+
+A bad release is never fixed by moving, deleting and recreating, or reusing its
+tag: installed CLIs compare semver, and checksums and image digests have
+already been handed out. Delete the GitHub Release or mark it as a prerelease,
+then cut the next patch.
+
+One-time repository settings:
+
+- A tag ruleset on `refs/tags/v*` restricting creation, update and deletion to
+  admins.
+- Required checks on `main`: `verify / lint`, `verify / test`, `verify / web`.
+- After the first push, set the GHCR package `page-report` to public; new
+  packages start private.
 
 ## License
 
