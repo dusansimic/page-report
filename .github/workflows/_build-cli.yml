@@ -58,6 +58,27 @@ jobs:
               -X main.date=${{ steps.date.outputs.iso }}" \
             -o dist/page-report ./cmd/page-report
 
+      # darwin binaries always link libSystem dynamically (there is no static
+      # libc on macOS), so only the cgo check applies there; linux must also be
+      # genuinely statically linked.
+      - name: Assert static binary
+        env:
+          GOOS: ${{ matrix.goos }}
+        run: |
+          set -eu
+          if ! go version -m dist/page-report | grep -q 'CGO_ENABLED=0'; then
+            echo "::error::dist/page-report was not built with CGO_ENABLED=0"
+            go version -m dist/page-report
+            exit 1
+          fi
+          if [ "$GOOS" = linux ]; then
+            out="$(file dist/page-report)"
+            case "$out" in
+              *"statically linked"*) ;;
+              *) echo "::error::dist/page-report is not statically linked"; echo "$out"; exit 1 ;;
+            esac
+          fi
+
       # Only the native build can be executed on the runner.
       - name: Smoke test
         if: matrix.goos == 'linux' && matrix.goarch == 'amd64'

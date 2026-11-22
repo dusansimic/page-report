@@ -69,16 +69,24 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     with:
       version: ${{ needs.meta.outputs.version }}
       channel: release
       push: true
 
+  # Release is the last write: it needs `image` so a failed image push never
+  # leaves a Release advertising a server version GHCR lacks. Re-running via
+  # workflow_dispatch with the same tag is idempotent (imagetools create
+  # overwrites tags, action-gh-release updates the existing release).
   github-release:
-    needs: [meta, cli]
+    needs: [meta, cli, image]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -108,6 +116,10 @@ jobs:
           done
           sha256sum page-report_*.tar.gz > checksums.txt
           cat checksums.txt
+
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: page-report_*.tar.gz
 
       - uses: softprops/action-gh-release@v3
         with:
